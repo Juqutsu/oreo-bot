@@ -1,0 +1,55 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker / CI meta
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+.github/
+
+# Dependencies (re-installed inside image)
+node_modules/
+
+# Environment / secrets — NEVER bake into images
+.env
+.env.*
+!.env.example
+
+# Logs & diagnostics
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Build output / caches
+dist/
+build/
+out/
+coverage/
+.nyc_output/
+.npm/
+.eslintcache
+.cache/
+
+# IDE / editor / OS junk
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local data
+*.sqlite
+*.sqlite3
+*.db
+data/
+
+# Docs / repo meta not needed at runtime
+README.md
+LICENSE
+*.md

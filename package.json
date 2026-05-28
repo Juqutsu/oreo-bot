@@ -1,0 +1,28 @@
+{
+  "name": "oreo",
+  "version": "1.0.0",
+  "description": "discord vb",
+  "homepage": "https://github.com/Juqutsu/oreo-bot#readme",
+  "bugs": {
+    "url": "https://github.com/Juqutsu/oreo-bot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Juqutsu/oreo-bot.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --env-file=.env index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=20.6"
+  },
+  "dependencies": {
+    "discord.js": "^14.26.4",
+    "mysql2": "^3.11.5"
+  }
+}
