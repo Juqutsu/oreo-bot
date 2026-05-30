@@ -69,7 +69,7 @@ module.exports = {
       }
       await conn.commit();
     } catch (err) {
-      await conn.rollback();
+      await conn.rollback().catch(() => {});
       console.error('/setup DB error:', err);
       return interaction.reply({
         content: 'Datenbankfehler — versuch es später.',
