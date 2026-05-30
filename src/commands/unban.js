@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const cases = require('../cases');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -53,6 +54,21 @@ module.exports = {
       });
     }
 
+    let caseNumber;
+    try {
+      const result = await cases.createCase({
+        guildId: interaction.guildId,
+        userId: targetId,
+        moderatorId: moderator.id,
+        type: 'unban',
+        reason: interaction.options.getString('reason'),
+      });
+      caseNumber = result.caseNumber;
+    } catch (err) {
+      console.error('createCase failed:', err);
+      caseNumber = null;
+    }
+
     await interaction.reply({
       content: `**${ban.user.username}** wurde entbannt.`,
       flags: MessageFlags.Ephemeral,
@@ -69,7 +85,7 @@ module.exports = {
           { name: '🛡️ Moderator', value: `<@${moderator.id}>`, inline: false },
           { name: '📝 Grund', value: reason, inline: false },
         )
-        .setFooter({ text: 'Case ID: TODO · 🐾' })
+        .setFooter({ text: caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾' })
         .setTimestamp();
       await logChannel.send({ embeds: [modEmbed] });
     } catch (e) {
