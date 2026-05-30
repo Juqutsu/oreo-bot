@@ -71,7 +71,7 @@ module.exports = {
     }
 
     await interaction.reply({
-      content: `**${target.username}** wurde gekickt.`,
+      content: `**${target.username}** wurde gekickt. (Case #${caseNumber ?? 'nicht gespeichert'})`,
       flags: MessageFlags.Ephemeral,
     });
 

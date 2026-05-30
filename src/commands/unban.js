@@ -70,7 +70,7 @@ module.exports = {
     }
 
     await interaction.reply({
-      content: `**${ban.user.username}** wurde entbannt.`,
+      content: `**${ban.user.username}** wurde entbannt. (Case #${caseNumber ?? 'nicht gespeichert'})`,
       flags: MessageFlags.Ephemeral,
     });
 
