@@ -69,6 +69,10 @@ async function handleRoleSet(interaction) {
   let previousTier = null;
   try {
     await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    // TOCTOU: previousTier is advisory — a concurrent /config role set on the
+    // same role may make the user-facing message inaccurate ("was already X"
+    // / "changed from X to Y"). Final DB state is always correct (last write
+    // wins via ON DUPLICATE KEY UPDATE). Same pattern as /reason.
     const [existing] = await pool.execute(
       'SELECT permission FROM role_permissions WHERE guild_id = ? AND role_id = ?',
       [interaction.guildId, role.id],
@@ -121,7 +125,11 @@ async function handleRoleUnset(interaction) {
       });
     }
 
-    // Lockout-Schutz: wenn keine admin-Rolle mehr UND User ist nicht Owner → Rollback
+    // Lockout-Schutz: wenn keine admin-Rolle mehr UND User ist nicht Owner → Rollback.
+    // FOR UPDATE versucht die noch lebenden admin-Rows zu locken. Wenn nach dem DELETE
+    // keine admin-Rows mehr matchen, lockt FOR UPDATE NICHTS — zwei parallele Transaktionen
+    // sehen beide adminCount=0 und rollen beide zurück. Korrekt by design (rollback ist
+    // der sichere Pfad), nicht durch den Lock erzwungen.
     const [adminRows] = await conn.execute(
       'SELECT COUNT(*) AS n FROM role_permissions WHERE guild_id = ? AND permission = ? FOR UPDATE',
       [interaction.guildId, 'admin'],
