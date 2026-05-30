@@ -27,7 +27,10 @@ async function ensureSchema() {
       await pool.query(stmt);
     } catch (err) {
       // 1060 = ER_DUP_FIELDNAME: column already exists — idempotent ADD COLUMN
-      if (err.errno === 1060) continue;
+      if (err.errno === 1060) {
+        console.warn('[schema] Skipped duplicate column (errno 1060):', err.sqlMessage);
+        continue;
+      }
       throw err;
     }
   }
