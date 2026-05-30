@@ -89,3 +89,19 @@ CREATE TABLE IF NOT EXISTS automod_exemptions (
   FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
   UNIQUE KEY uq_exemption (guild_id, target_type, target_id)
 );
+
+-- =========================================================
+-- ALTER STATEMENTS (Stage 1.5 — case-management)
+-- Run after CREATE TABLE. All idempotent.
+-- =========================================================
+
+-- Neue ENUM-Werte für Meta-Cases. MODIFY COLUMN ist idempotent —
+-- MySQL setzt die Spalten-Definition auf den Soll-Zustand.
+ALTER TABLE infractions MODIFY COLUMN type
+  ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited') NOT NULL;
+
+-- parent_case_number: Verbindung von Meta-Cases zum Original-Case.
+-- ADD COLUMN ohne IF NOT EXISTS (MySQL unterstützt IF NOT EXISTS nicht);
+-- src/schema.js ignoriert ER_DUP_FIELDNAME (1060) für Idempotenz.
+ALTER TABLE infractions ADD COLUMN
+  parent_case_number INT UNSIGNED NULL AFTER case_number;

@@ -23,7 +23,13 @@ async function ensureSchema() {
 
   const pool = getPool();
   for (const stmt of statements) {
-    await pool.query(stmt);
+    try {
+      await pool.query(stmt);
+    } catch (err) {
+      // 1060 = ER_DUP_FIELDNAME: column already exists — idempotent ADD COLUMN
+      if (err.errno === 1060) continue;
+      throw err;
+    }
   }
 }
 
