@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 module.exports = {
@@ -7,7 +7,9 @@ module.exports = {
     .setDescription('Entfernt eine Verwarnung (Soft-Delete + Audit-Case).')
     .addIntegerOption((option) => option.setName('case_number').setDescription('Case-Nummer der Verwarnung').setRequired(true).setMinValue(1))
     .addStringOption((option) => option.setName('reason').setDescription('Grund für die Entfernung').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+,
+
+  requiredTier: 'mod',
 
   async execute(interaction) {
     const originalCaseNumber = interaction.options.getInteger('case_number');

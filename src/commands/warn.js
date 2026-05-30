@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 module.exports = {
@@ -7,7 +7,9 @@ module.exports = {
     .setDescription('Verwarnt einen Nutzer und speichert es als Case.')
     .addUserOption((option) => option.setName('target').setDescription('Wer soll verwarnt werden?').setRequired(true))
     .addStringOption((option) => option.setName('reason').setDescription('Grund für die Verwarnung').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+,
+
+  requiredTier: 'mod',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');

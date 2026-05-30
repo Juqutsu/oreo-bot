@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000; // 28 days — Discord API limit
@@ -36,7 +36,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('timeout')
     .setDescription('Gibt einem Mitglied einen Timeout.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption(option =>
       option.setName('user').setDescription('Das Mitglied, das einen Timeout bekommen soll.').setRequired(true),
     )
@@ -49,6 +48,8 @@ module.exports = {
     .addStringOption(option =>
       option.setName('reason').setDescription('Grund für den Timeout.').setRequired(false),
     ),
+
+  requiredTier: 'mod',
 
   async execute(interaction) {
     const target = interaction.options.getUser('user');

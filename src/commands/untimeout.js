@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 module.exports = {
@@ -7,7 +7,9 @@ module.exports = {
     .setDescription('Hebt den Timeout eines Users auf.')
     .addUserOption((option) => option.setName('target').setDescription('Welcher User soll aus dem Timeout?').setRequired(true))
     .addStringOption((option) => option.setName('reason').setDescription('Grund für die Aufhebung').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+,
+
+  requiredTier: 'mod',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');

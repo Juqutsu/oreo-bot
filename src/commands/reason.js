@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 const META_TYPES = new Set(['warn_removed', 'reason_edited']);
@@ -9,7 +9,9 @@ module.exports = {
     .setDescription('Editiert den Grund eines bestehenden Cases.')
     .addIntegerOption((option) => option.setName('case_number').setDescription('Case-Nummer').setRequired(true).setMinValue(1))
     .addStringOption((option) => option.setName('new_reason').setDescription('Neuer Grund').setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+,
+
+  requiredTier: 'mod',
 
   async execute(interaction) {
     const originalCaseNumber = interaction.options.getInteger('case_number');
