@@ -158,33 +158,26 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
-    // Mod-log embed
-    const modlogChannelId = process.env.MODLOG_CHANNEL_ID;
-    if (!modlogChannelId) return;
-
-    const channel = interaction.guild.channels.cache.get(modlogChannelId);
-    if (!channel) return;
-
-    const embed = new EmbedBuilder()
-      .setColor(0xfaa61a)
-      .setTitle('⏱️ Timeout vergeben')
-      .setThumbnail(target.displayAvatarURL({ dynamic: true }))
-      .addFields(
-        { name: 'User', value: `${target} (${target.username})`, inline: true },
-        { name: 'Moderator', value: `${moderator.user} (${moderator.user.username})`, inline: true },
-        { name: 'Grund', value: reason },
-        { name: 'Dauer', value: durationLabel, inline: true },
-        { name: 'Läuft ab', value: `<t:${expiresAt}:f>`, inline: true },
-      )
-      .setFooter({ text: caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾' })
-      .setTimestamp();
-
     try {
-      await channel.send({ embeds: [embed] });
+      const logChannel = await interaction.client.channels.fetch(process.env.MODLOG_CHANNEL_ID);
+      const embed = new EmbedBuilder()
+        .setColor(0xfaa61a)
+        .setTitle('⏱️ Timeout vergeben')
+        .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+        .addFields(
+          { name: 'User', value: `${target} (${target.username})`, inline: true },
+          { name: 'Moderator', value: `${moderator.user} (${moderator.user.username})`, inline: true },
+          { name: 'Grund', value: reason },
+          { name: 'Dauer', value: durationLabel, inline: true },
+          { name: 'Läuft ab', value: `<t:${expiresAt}:f>`, inline: true },
+        )
+        .setFooter({ text: caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾' })
+        .setTimestamp();
+      await logChannel.send({ embeds: [embed] });
     } catch (err) {
-      console.warn('Mod-log konnte nicht gesendet werden:', err);
+      console.warn('ModLog send failed:', err);
       await interaction.followUp({
-        content: 'Timeout wurde vergeben, aber der Mod-Log-Eintrag ist fehlgeschlagen.',
+        content: 'Mod-Log-Eintrag fehlgeschlagen. Bitte `MODLOG_CHANNEL_ID` prüfen.',
         flags: MessageFlags.Ephemeral,
       });
     }
