@@ -2,6 +2,7 @@ const { Client, Collection, Events, GatewayIntentBits, MessageFlags } = require(
 const { loadCommands } = require('./src/loadCommands');
 const { deployCommands } = require('./src/deployCommands');
 const { ping: pingDb } = require('./src/db');
+const { ensureSchema } = require('./src/schema');
 
 const {
   DISCORD_TOKEN, CLIENT_ID, GUILD_ID,
@@ -61,6 +62,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.log('MySQL reachable.');
   } catch (err) {
     console.error('Failed to reach MySQL:', err.message);
+    process.exit(1);
+  }
+
+  try {
+    await ensureSchema();
+    console.log('Schema sichergestellt.');
+  } catch (err) {
+    console.error('Schema-Setup fehlgeschlagen:', err.message);
     process.exit(1);
   }
 

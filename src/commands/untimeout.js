@@ -3,11 +3,11 @@ const cases = require('../cases');
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('ban')
-    .setDescription('Bannt einen Nutzer vom Server.')
-    .addUserOption((option) => option.setName('target').setDescription('Wer soll gebannt werden?').setRequired(true))
-    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers), 
+    .setName('untimeout')
+    .setDescription('Hebt den Timeout eines Users auf.')
+    .addUserOption((option) => option.setName('target').setDescription('Welcher User soll aus dem Timeout?').setRequired(true))
+    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Aufhebung').setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');
@@ -15,41 +15,33 @@ module.exports = {
 
     const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
     const moderator = interaction.member;
-    const botMember = interaction.guild.members.me;
 
-    if(target.id === moderator.id) return interaction.reply({ // Kann nicht selbst bannen
-      content: 'Selbst-Ban geht nicht.',
+    if (!targetMember) return interaction.reply({
+      content: 'Dieser User ist nicht (mehr) auf dem Server.',
       flags: MessageFlags.Ephemeral,
     });
 
-    if(target.id === botMember.id) return interaction.reply({ // Kann bot nicht bannen
-      content: 'Oreo kann sich nicht selber bannen.',
+    if (!targetMember.isCommunicationDisabled()) return interaction.reply({
+      content: 'Dieser User ist gar nicht im Timeout.',
       flags: MessageFlags.Ephemeral,
     });
 
-    if(target.id === interaction.guild.ownerId) return interaction.reply({ // Kann owner nicht bannen
-      content: 'Den Server-Inhaber kannst du nicht bannen.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(targetMember && moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) return interaction.reply({ // Mod Hierarchie
+    if (moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) return interaction.reply({
       content: 'Diese Person hat dieselbe oder eine höhere Rolle als du.',
       flags: MessageFlags.Ephemeral,
     });
 
-    if(targetMember && !targetMember.bannable) return interaction.reply({ // Bot Hierarchie + Permission
-      content: 'Diese Person lässt sich nicht bannen. Vermutlich ist Oreos Rolle nicht hoch genug.',
+    if (!targetMember.moderatable) return interaction.reply({
+      content: 'Diese Person lässt sich nicht aus dem Timeout holen. Vermutlich ist Oreos Rolle nicht hoch genug.',
       flags: MessageFlags.Ephemeral,
     });
 
     try {
-      await interaction.guild.members.ban(target.id, {
-        reason: `${moderator.user.tag}: ${reason}`,
-      });
+      await targetMember.timeout(null, `${moderator.user.tag}: ${reason}`);
     } catch (e) {
       console.error(e);
       return interaction.reply({
-        content: 'Der Ban hat nicht geklappt. Details stehen in den Logs.',
+        content: 'Das Aufheben hat nicht geklappt. Details stehen in den Logs.',
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -60,7 +52,7 @@ module.exports = {
         guildId: interaction.guildId,
         userId: target.id,
         moderatorId: moderator.id,
-        type: 'ban',
+        type: 'untimeout',
         reason: interaction.options.getString('reason'),
       });
       caseNumber = result.caseNumber;
@@ -70,15 +62,15 @@ module.exports = {
     }
 
     await interaction.reply({
-      content: `**${target.username}** wurde gebannt. (Case #${caseNumber ?? 'nicht gespeichert'})`,
+      content: `**${target.username}** ist wieder aus dem Timeout.`,
       flags: MessageFlags.Ephemeral,
     });
 
     try {
       const logChannel = await interaction.client.channels.fetch(process.env.MODLOG_CHANNEL_ID);
       const modEmbed = new EmbedBuilder()
-        .setTitle('🔨 User gebannt')
-        .setColor(0xed4245)
+        .setTitle('🔊 Timeout aufgehoben')
+        .setColor(0x57f287)
         .setThumbnail(target.displayAvatarURL({ size: 256 }))
         .addFields(
           { name: '👤 User', value: `<@${target.id}>`, inline: false },
