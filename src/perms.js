@@ -52,6 +52,23 @@ async function hasTier(guildId, member, requiredTier) {
  * @returns {Promise<boolean>}  true wenn erlaubt, false wenn schon geantwortet
  */
 async function requireTier(interaction, requiredTier) {
+  if (!(requiredTier in TIERS)) {
+    console.error(`[perms] requireTier called with unknown tier: '${requiredTier}'`);
+    await interaction.reply({
+      content: 'Interner Fehler — ungültiger Tier-Wert. Bitte den Bot-Admin informieren.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return false;
+  }
+
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: 'Dieser Befehl funktioniert nur auf Servern.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return false;
+  }
+
   const member = interaction.member;
   if (!member) {
     await interaction.reply({
