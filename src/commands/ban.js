@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+﻿const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 module.exports = {
@@ -6,8 +6,9 @@ module.exports = {
     .setName('ban')
     .setDescription('Bannt einen Nutzer vom Server.')
     .addUserOption((option) => option.setName('target').setDescription('Wer soll gebannt werden?').setRequired(true))
-    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers), 
+    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setRequired(false)),
+
+  requiredTier: 'admin',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');

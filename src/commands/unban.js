@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+﻿const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 module.exports = {
@@ -14,8 +14,9 @@ module.exports = {
     )
     .addStringOption((reason) =>
       reason.setName('reason').setDescription('Grund für die Entbannung').setRequired(false),
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+    ),
+
+  requiredTier: 'admin',
 
   async autocomplete(interaction) {
     const query = interaction.options.getFocused().toLowerCase();

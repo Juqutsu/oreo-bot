@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+﻿const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 module.exports = {
@@ -6,8 +6,9 @@ module.exports = {
     .setName('kick')
     .setDescription('Kicke einen Spieler vom Server')
     .addUserOption((user) => user.setName("target").setDescription("Spieler zum kicken").setRequired(true))
-    .addStringOption((r) => r.setName("reason").setDescription("Grund fürs kicken").setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers), 
+    .addStringOption((r) => r.setName("reason").setDescription("Grund fürs kicken").setRequired(false)),
+
+  requiredTier: 'admin',
 
   async execute(interaction) {
     
