@@ -8,6 +8,8 @@ const TYPE_LABELS = {
   kick: '👢 Kick',
   ban: '🔨 Ban',
   unban: '🔓 Unban',
+  warn_removed: '✅ Verwarnung entfernt',
+  reason_edited: '📝 Grund editiert',
 };
 
 const TYPE_COLORS = {
@@ -17,6 +19,8 @@ const TYPE_COLORS = {
   kick: 0xed4245,
   ban: 0xed4245,
   unban: 0x57f287,
+  warn_removed: 0x57f287,
+  reason_edited: 0x5865f2,
 };
 
 module.exports = {
@@ -61,6 +65,10 @@ module.exports = {
         { name: '📅 Erstellt', value: `<t:${createdSec}:f>`, inline: false },
         { name: '📝 Grund', value: reason, inline: false },
       );
+
+    if (c.parent_case_number) {
+      embed.addFields({ name: '🔗 Bezogen auf', value: `Case #${c.parent_case_number}`, inline: true });
+    }
 
     if (c.duration_ms) {
       embed.addFields({ name: '⏱️ Dauer (ms)', value: String(c.duration_ms), inline: true });
