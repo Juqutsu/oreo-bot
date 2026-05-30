@@ -32,7 +32,7 @@ Stage 2a löst das Permission-Problem als Fundament für Stage 2b (`/config` Cha
 1. `src/perms.js` — neues Modul: Tier-Resolver + Middleware-Helper
 2. `/setup` — owner-only Bootstrap-Command, schreibt initiale Tier-Zuweisungen
 3. `/config role set | unset | list` — Live-Editor für Tier-Zuweisungen, admin-tier-gegated
-4. Middleware in `loadCommands.js` — prüft `command.requiredTier` vor `execute()`
+4. Middleware im `InteractionCreate`-Handler von `index.js` — prüft `command.requiredTier` vor `execute()`
 5. Migration aller 11 bestehenden Commands auf das neue System
 6. Entfernung aller `setDefaultMemberPermissions(...)`-Aufrufe in Mod-Commands
 7. Lockout-Schutz: letzte Admin-Rolle kann nicht von einem Nicht-Owner-Admin entzogen werden
@@ -78,7 +78,7 @@ src/
 
 - **Single Source of Truth:** `role_permissions` definiert alles. Kein Discord-Permission-Fallback.
 - **Owner-Privileg nur für `/setup`:** Server-Owner hat keinen automatischen `admin`-Tier. Er kann jederzeit `/setup` ausführen, um sich (oder andere) wieder Tier zuzuweisen. Das verhindert den finalen Lockout, ohne den Resolver zu komplizieren.
-- **Middleware statt Pro-Command-Code:** Tier-Check läuft zentral in `loadCommands.js`. Commands deklarieren nur `requiredTier`, der Dispatcher gated.
+- **Middleware statt Pro-Command-Code:** Tier-Check läuft zentral im `InteractionCreate`-Handler von `index.js`. Commands deklarieren nur `requiredTier`, der Dispatcher gated. `loadCommands.js` bleibt ein reiner File-Loader.
 - **Orphan-tolerant:** Rollen, die auf Discord nicht mehr existieren, werden vom Resolver ignoriert. Cleanup ist Admin-Sache via `/config role unset`.
 - **Lockout-Schutz für Nicht-Owner:** Wer nicht Owner ist, kann nicht die letzte Admin-Rolle entziehen — Recovery-Pfad bliebe sonst nur Bot-Neustart mit DB-Eingriff.
 
@@ -116,7 +116,7 @@ exports.hasTier = async (guildId, member, requiredTier) => boolean;
 
 /**
  * Middleware-Helper: prüft Tier, antwortet ephemeral wenn nicht erlaubt.
- * Wird von loadCommands.js aufgerufen, bevor execute() läuft.
+ * Wird vom InteractionCreate-Handler in index.js aufgerufen, bevor execute() läuft.
  * Bei DB-Failure: ephemeral "Datenbankfehler" + return false + console.error.
  * @returns {Promise<boolean>}  true wenn erlaubt, false wenn schon geantwortet
  */
