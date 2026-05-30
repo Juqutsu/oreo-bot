@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 const TYPE_ICONS = {
@@ -15,8 +15,9 @@ module.exports = {
     .setName('modhistory')
     .setDescription('Zeigt die komplette Mod-Historie eines Users.')
     .addUserOption((option) => option.setName('user').setDescription('Wessen Historie?').setRequired(true))
-    .addBooleanOption((option) => option.setName('include_inactive').setDescription('Auch entfernte/aufgehobene Aktionen zeigen (Default: ja)').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+    .addBooleanOption((option) => option.setName('include_inactive').setDescription('Auch entfernte/aufgehobene Aktionen zeigen (Default: ja)').setRequired(false)),
+
+  requiredTier: 'helper',
 
   async execute(interaction) {
     const target = interaction.options.getUser('user');

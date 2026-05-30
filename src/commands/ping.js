@@ -5,6 +5,8 @@ module.exports = {
     .setName('ping')
     .setDescription('Prüft, ob Oreo wach ist.'),
 
+  requiredTier: 'helper',
+
   async execute(interaction) {
     await interaction.reply({
       content: 'Pong!',

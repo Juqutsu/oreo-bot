@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 const TYPE_LABELS = {
@@ -27,8 +27,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('case')
     .setDescription('Zeigt einen Case anhand der Nummer.')
-    .addIntegerOption((option) => option.setName('number').setDescription('Case-Nummer').setRequired(true).setMinValue(1))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+    .addIntegerOption((option) => option.setName('number').setDescription('Case-Nummer').setRequired(true).setMinValue(1)),
+
+  requiredTier: 'helper',
 
   async execute(interaction) {
     const caseNumber = interaction.options.getInteger('number');

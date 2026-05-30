@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 
 module.exports = {
@@ -6,8 +6,9 @@ module.exports = {
     .setName('warnings')
     .setDescription('Zeigt die Verwarnungen eines Users.')
     .addUserOption((option) => option.setName('target').setDescription('Wessen Verwarnungen?').setRequired(true))
-    .addBooleanOption((option) => option.setName('include_inactive').setDescription('Auch entfernte Verwarnungen zeigen').setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+    .addBooleanOption((option) => option.setName('include_inactive').setDescription('Auch entfernte Verwarnungen zeigen').setRequired(false)),
+
+  requiredTier: 'helper',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');
