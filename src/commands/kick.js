@@ -38,7 +38,7 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
-    if(targetMember && !targetMember.bannable) return interaction.reply({ // Bot Hierarchie + Permission
+    if(targetMember && !targetMember.kickable) return interaction.reply({ // Bot Hierarchie + Permission
       content: 'Diese Person lässt sich nicht kicken. Vermutlich ist Oreos Rolle nicht hoch genug.',
       flags: MessageFlags.Ephemeral,
     });
