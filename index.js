@@ -50,6 +50,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       allowed = await perms.requireTier(interaction, command.requiredTier);
     } catch (err) {
       console.error(`Tier-Check für "${interaction.commandName}" fehlgeschlagen:`, err);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: 'Beim Ausführen des Commands ist etwas schiefgegangen.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
       return;
     }
     if (!allowed) {
