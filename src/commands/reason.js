@@ -8,8 +8,7 @@ module.exports = {
     .setName('reason')
     .setDescription('Editiert den Grund eines bestehenden Cases.')
     .addIntegerOption((option) => option.setName('case_number').setDescription('Case-Nummer').setRequired(true).setMinValue(1))
-    .addStringOption((option) => option.setName('new_reason').setDescription('Neuer Grund').setRequired(true))
-,
+    .addStringOption((option) => option.setName('new_reason').setDescription('Neuer Grund').setRequired(true)),
 
   requiredTier: 'mod',
 

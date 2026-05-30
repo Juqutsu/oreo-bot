@@ -6,8 +6,7 @@ module.exports = {
     .setName('removewarn')
     .setDescription('Entfernt eine Verwarnung (Soft-Delete + Audit-Case).')
     .addIntegerOption((option) => option.setName('case_number').setDescription('Case-Nummer der Verwarnung').setRequired(true).setMinValue(1))
-    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Entfernung').setRequired(false))
-,
+    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Entfernung').setRequired(false)),
 
   requiredTier: 'mod',
 

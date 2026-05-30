@@ -6,8 +6,7 @@ module.exports = {
     .setName('untimeout')
     .setDescription('Hebt den Timeout eines Users auf.')
     .addUserOption((option) => option.setName('target').setDescription('Welcher User soll aus dem Timeout?').setRequired(true))
-    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Aufhebung').setRequired(false))
-,
+    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Aufhebung').setRequired(false)),
 
   requiredTier: 'mod',
 
