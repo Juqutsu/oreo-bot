@@ -52,9 +52,9 @@ Stage 2a löst das Permission-Problem als Fundament für Stage 2b (`/config` Cha
 ## Architektur (Delta zu Stage 1.5)
 
 ```
+index.js                    (EDIT) — Tier-Check vor execute() im InteractionCreate-Handler
 src/
 ├── perms.js                (NEU)  — Tier-Resolver + Middleware-Helper
-├── loadCommands.js         (EDIT) — Tier-Check vor execute()
 ├── commands/
 │   ├── setup.js            (NEU)  — owner-only Bootstrap
 │   ├── config.js           (NEU)  — Subcommand-Group "role"
@@ -161,7 +161,7 @@ exports.getEffectiveTier = async (guildId, member) => {
 
 ---
 
-## Middleware (`loadCommands.js`)
+## Middleware (`index.js` InteractionCreate-Handler)
 
 ### Command-Vertrag
 
@@ -179,7 +179,7 @@ module.exports = {
 
 ### Dispatcher-Änderung
 
-Wo aktuell `command.execute(interaction)` aufgerufen wird, läuft vorher:
+Im `InteractionCreate`-Handler von `index.js` läuft vor `command.execute(interaction)` ein Tier-Check. Autocomplete-Interactions sind davon ausgenommen (kein User-facing Reply möglich, kein Schaden).
 
 ```js
 if (command.requiredTier && !(await perms.requireTier(interaction, command.requiredTier))) {
@@ -187,6 +187,8 @@ if (command.requiredTier && !(await perms.requireTier(interaction, command.requi
 }
 await command.execute(interaction);
 ```
+
+`loadCommands.js` bleibt unverändert — es lädt nur Files in die Map und kennt die Tier-Logik nicht.
 
 ### `setDefaultMemberPermissions` — wird entfernt
 
