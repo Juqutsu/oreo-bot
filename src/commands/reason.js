@@ -17,6 +17,10 @@ module.exports = {
     const moderator = interaction.member;
 
     // 1. Original-Case prüfen.
+    // Hinweis: zwischen diesem Read und dem späteren editReason() existiert eine
+    // TOCTOU-Lücke. Beabsichtigt — schlimmster Fall ist ein redundanter
+    // reason_edited Meta-Case (wenn ein anderer Mod parallel editiert), keine
+    // Datenkorruption. editReason() sperrt den Case selbst via FOR UPDATE.
     let original;
     try {
       original = await cases.getCaseByNumber(interaction.guildId, originalCaseNumber);
