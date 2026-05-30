@@ -3,6 +3,7 @@ const { loadCommands } = require('./src/loadCommands');
 const { deployCommands } = require('./src/deployCommands');
 const { ping: pingDb } = require('./src/db');
 const { ensureSchema } = require('./src/schema');
+const perms = require('./src/perms');
 
 const {
   DISCORD_TOKEN, CLIENT_ID, GUILD_ID,
@@ -42,6 +43,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   if (!interaction.isChatInputCommand()) return;
+
+  if (command.requiredTier) {
+    let allowed;
+    try {
+      allowed = await perms.requireTier(interaction, command.requiredTier);
+    } catch (err) {
+      console.error(`Tier-Check für "${interaction.commandName}" fehlgeschlagen:`, err);
+      return;
+    }
+    if (!allowed) {
+      console.info(`[perms] ${interaction.user.tag} blocked from /${interaction.commandName} (tier required: ${command.requiredTier})`);
+      return;
+    }
+  }
 
   try {
     await command.execute(interaction);
