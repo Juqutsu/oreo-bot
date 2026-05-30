@@ -104,10 +104,30 @@ async function deactivate(guildId, caseNumber) {
   return result.affectedRows > 0;
 }
 
+/**
+ * Listet ALLE Infractions eines Users (alle Typen außer Meta-Cases).
+ * Für /modhistory.
+ * @returns {Promise<object[]>}
+ */
+async function listUserInfractions(guildId, userId, { includeInactive = true, limit = 25 } = {}) {
+  const activeFilter = includeInactive ? '' : 'AND active = 1';
+  const [rows] = await getPool().query(
+    `SELECT * FROM infractions
+       WHERE guild_id = ? AND user_id = ?
+         AND type NOT IN ('warn_removed', 'reason_edited')
+         ${activeFilter}
+       ORDER BY created_at DESC
+       LIMIT ${Number(limit)}`,
+    [guildId, userId],
+  );
+  return rows;
+}
+
 module.exports = {
   createCase,
   getCaseByNumber,
   listWarnings,
+  listUserInfractions,
   countActiveWarnings,
   deactivate,
 };
