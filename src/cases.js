@@ -73,8 +73,8 @@ async function listWarnings(guildId, userId, { includeInactive = false, limit = 
     `SELECT * FROM infractions
        WHERE guild_id = ? AND user_id = ? AND type = 'warn' ${activeFilter}
        ORDER BY created_at DESC
-       LIMIT ${Number(limit)}`,
-    [guildId, userId],
+       LIMIT ?`,
+    [guildId, userId, Number(limit)],
   );
   return rows;
 }
@@ -211,8 +211,8 @@ async function listUserInfractions(guildId, userId, { includeInactive = true, li
          AND type NOT IN ('warn_removed', 'reason_edited')
          ${activeFilter}
        ORDER BY created_at DESC
-       LIMIT ${Number(limit)}`,
-    [guildId, userId],
+       LIMIT ?`,
+    [guildId, userId, Number(limit)],
   );
   return rows;
 }
