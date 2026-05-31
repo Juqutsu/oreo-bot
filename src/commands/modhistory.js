@@ -17,7 +17,7 @@ module.exports = {
     .addUserOption((option) => option.setName('user').setDescription('Wessen Historie?').setRequired(true))
     .addBooleanOption((option) => option.setName('include_inactive').setDescription('Auch entfernte/aufgehobene Aktionen zeigen (Default: ja)').setRequired(false)),
 
-  requiredTier: 'helper',
+  requiredTier: 'supporter',
 
   async execute(interaction) {
     const target = interaction.options.getUser('user');

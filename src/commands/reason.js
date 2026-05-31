@@ -10,7 +10,7 @@ module.exports = {
     .addIntegerOption((option) => option.setName('case_number').setDescription('Case-Nummer').setRequired(true).setMinValue(1))
     .addStringOption((option) => option.setName('new_reason').setDescription('Neuer Grund').setRequired(true)),
 
-  requiredTier: 'mod',
+  requiredTier: 'moderator',
 
   async execute(interaction) {
     const originalCaseNumber = interaction.options.getInteger('case_number');

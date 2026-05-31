@@ -5,9 +5,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup')
     .setDescription('Initialer Bootstrap der role_permissions (nur Server-Owner).')
-    .addRoleOption((o) => o.setName('admin-role').setDescription('Rolle für Tier admin').setRequired(true))
-    .addRoleOption((o) => o.setName('mod-role').setDescription('Rolle für Tier mod').setRequired(false))
-    .addRoleOption((o) => o.setName('helper-role').setDescription('Rolle für Tier helper').setRequired(false))
+    .addRoleOption((o) => o.setName('owner-role').setDescription('Rolle für Tier owner').setRequired(true))
+    .addRoleOption((o) => o.setName('moderator-role').setDescription('Rolle für Tier moderator').setRequired(false))
+    .addRoleOption((o) => o.setName('supporter-role').setDescription('Rolle für Tier supporter').setRequired(false))
     .setDefaultMemberPermissions(0),
 
   // KEIN requiredTier — Bootstrap muss laufen, wenn role_permissions leer ist.
@@ -21,14 +21,14 @@ module.exports = {
       });
     }
 
-    const adminRole = interaction.options.getRole('admin-role');
-    const modRole = interaction.options.getRole('mod-role');
-    const helperRole = interaction.options.getRole('helper-role');
+    const ownerRole = interaction.options.getRole('owner-role');
+    const moderatorRole = interaction.options.getRole('moderator-role');
+    const supporterRole = interaction.options.getRole('supporter-role');
 
     const assignments = [
-      { role: adminRole, tier: 'admin' },
-      { role: modRole, tier: 'mod' },
-      { role: helperRole, tier: 'helper' },
+      { role: ownerRole, tier: 'owner' },
+      { role: moderatorRole, tier: 'moderator' },
+      { role: supporterRole, tier: 'supporter' },
     ].filter((a) => a.role !== null);
 
     // Validation: @everyone
@@ -83,9 +83,9 @@ module.exports = {
       .setTitle('✅ Setup abgeschlossen')
       .setColor(0x57f287)
       .addFields(
-        { name: 'Admin',  value: adminRole  ? `<@&${adminRole.id}>`  : '(nicht gesetzt)', inline: false },
-        { name: 'Mod',    value: modRole    ? `<@&${modRole.id}>`    : '(nicht gesetzt)', inline: false },
-        { name: 'Helper', value: helperRole ? `<@&${helperRole.id}>` : '(nicht gesetzt)', inline: false },
+        { name: 'Owner',     value: ownerRole     ? `<@&${ownerRole.id}>`     : '(nicht gesetzt)', inline: false },
+        { name: 'Moderator', value: moderatorRole ? `<@&${moderatorRole.id}>` : '(nicht gesetzt)', inline: false },
+        { name: 'Supporter', value: supporterRole ? `<@&${supporterRole.id}>` : '(nicht gesetzt)', inline: false },
       )
       .setFooter({ text: `${assignments.length} Rollen konfiguriert · weitere via /config role set · 🐾` });
 

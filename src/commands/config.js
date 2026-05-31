@@ -2,12 +2,12 @@ const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js'
 const { getPool } = require('../db');
 
 const TIER_CHOICES = [
-  { name: 'helper', value: 'helper' },
-  { name: 'mod',    value: 'mod'    },
-  { name: 'admin',  value: 'admin'  },
+  { name: 'supporter', value: 'supporter' },
+  { name: 'moderator', value: 'moderator' },
+  { name: 'owner',     value: 'owner'     },
 ];
 
-const TIER_ORDER = ['admin', 'mod', 'helper'];
+const TIER_ORDER = ['owner', 'moderator', 'supporter'];
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -30,7 +30,7 @@ module.exports = {
         )
     ),
 
-  requiredTier: 'admin',
+  requiredTier: 'owner',
 
   async execute(interaction) {
     const group = interaction.options.getSubcommandGroup(false);
@@ -125,22 +125,23 @@ async function handleRoleUnset(interaction) {
       });
     }
 
-    // Lockout-Schutz: wenn keine admin-Rolle mehr UND User ist nicht Owner → Rollback.
-    // FOR UPDATE versucht die noch lebenden admin-Rows zu locken. Wenn nach dem DELETE
-    // keine admin-Rows mehr matchen, lockt FOR UPDATE NICHTS — zwei parallele Transaktionen
-    // sehen beide adminCount=0 und rollen beide zurück. Korrekt by design (rollback ist
-    // der sichere Pfad), nicht durch den Lock erzwungen.
-    const [adminRows] = await conn.execute(
+    // Lockout-Schutz: wenn keine owner-Tier-Rolle mehr UND User ist nicht Discord-Server-
+    // Owner → Rollback. FOR UPDATE versucht die noch lebenden owner-Rows zu locken. Wenn
+    // nach dem DELETE keine owner-Rows mehr matchen, lockt FOR UPDATE NICHTS — zwei
+    // parallele Transaktionen sehen beide ownerCount=0 und rollen beide zurück. Korrekt
+    // by design (rollback ist der sichere Pfad), nicht durch den Lock erzwungen.
+    // Hinweis: 'owner'-Tier (DB) ≠ Discord-Server-Owner (interaction.guild.ownerId).
+    const [ownerRows] = await conn.execute(
       'SELECT COUNT(*) AS n FROM role_permissions WHERE guild_id = ? AND permission = ? FOR UPDATE',
-      [interaction.guildId, 'admin'],
+      [interaction.guildId, 'owner'],
     );
-    const adminCount = Number(adminRows[0].n);
-    const isOwner = interaction.user.id === interaction.guild.ownerId;
+    const ownerCount = Number(ownerRows[0].n);
+    const isServerOwner = interaction.user.id === interaction.guild.ownerId;
 
-    if (adminCount === 0 && !isOwner) {
+    if (ownerCount === 0 && !isServerOwner) {
       await conn.rollback().catch(() => {});
       return interaction.reply({
-        content: "Abbruch — das wäre die letzte Admin-Rolle. Setze erst eine andere Rolle auf 'admin' oder lass den Server-Owner das machen.",
+        content: "Abbruch — das wäre die letzte Owner-Tier-Rolle. Setze erst eine andere Rolle auf 'owner' oder lass den Discord-Server-Owner das machen.",
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -185,7 +186,7 @@ async function handleRoleList(interaction) {
     });
   }
 
-  const byTier = { admin: [], mod: [], helper: [] };
+  const byTier = { owner: [], moderator: [], supporter: [] };
   for (const row of rows) {
     const roleId = String(row.role_id);
     const stillExists = interaction.guild.roles.cache.has(roleId);

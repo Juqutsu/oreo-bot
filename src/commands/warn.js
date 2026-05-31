@@ -8,7 +8,7 @@ module.exports = {
     .addUserOption((option) => option.setName('target').setDescription('Wer soll verwarnt werden?').setRequired(true))
     .addStringOption((option) => option.setName('reason').setDescription('Grund für die Verwarnung').setRequired(false)),
 
-  requiredTier: 'mod',
+  requiredTier: 'moderator',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');

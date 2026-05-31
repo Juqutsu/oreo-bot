@@ -49,7 +49,7 @@ module.exports = {
       option.setName('reason').setDescription('Grund für den Timeout.').setRequired(false),
     ),
 
-  requiredTier: 'mod',
+  requiredTier: 'moderator',
 
   async execute(interaction) {
     const target = interaction.options.getUser('user');

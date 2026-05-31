@@ -8,7 +8,7 @@ module.exports = {
     .addUserOption((option) => option.setName('target').setDescription('Wessen Verwarnungen?').setRequired(true))
     .addBooleanOption((option) => option.setName('include_inactive').setDescription('Auch entfernte Verwarnungen zeigen').setRequired(false)),
 
-  requiredTier: 'helper',
+  requiredTier: 'supporter',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');

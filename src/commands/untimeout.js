@@ -8,7 +8,7 @@ module.exports = {
     .addUserOption((option) => option.setName('target').setDescription('Welcher User soll aus dem Timeout?').setRequired(true))
     .addStringOption((option) => option.setName('reason').setDescription('Grund für die Aufhebung').setRequired(false)),
 
-  requiredTier: 'mod',
+  requiredTier: 'moderator',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');

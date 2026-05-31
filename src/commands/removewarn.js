@@ -8,7 +8,7 @@ module.exports = {
     .addIntegerOption((option) => option.setName('case_number').setDescription('Case-Nummer der Verwarnung').setRequired(true).setMinValue(1))
     .addStringOption((option) => option.setName('reason').setDescription('Grund für die Entfernung').setRequired(false)),
 
-  requiredTier: 'mod',
+  requiredTier: 'moderator',
 
   async execute(interaction) {
     const originalCaseNumber = interaction.options.getInteger('case_number');

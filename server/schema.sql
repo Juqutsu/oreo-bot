@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS escalation_rules (
 CREATE TABLE IF NOT EXISTS role_permissions (
   guild_id    BIGINT UNSIGNED NOT NULL,
   role_id     BIGINT UNSIGNED NOT NULL,
-  permission  ENUM('helper','mod','admin') NOT NULL,
+  permission  ENUM('supporter','moderator','owner') NOT NULL,
   PRIMARY KEY (guild_id, role_id),
   FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
 );
@@ -105,3 +105,23 @@ ALTER TABLE infractions MODIFY COLUMN type
 -- src/schema.js ignoriert ER_DUP_FIELDNAME (1060) für Idempotenz.
 ALTER TABLE infractions ADD COLUMN
   parent_case_number INT UNSIGNED NULL AFTER case_number;
+
+-- =========================================================
+-- ALTER STATEMENTS (Stage 2a — role-permissions tier rename)
+-- helper → supporter, mod → moderator, admin → owner
+-- Idempotent über 3-Schritt-Migration (expand → rename → shrink).
+-- =========================================================
+
+-- 1. ENUM temporär auf die Vereinigungsmenge erweitern (so dass UPDATEs unten
+--    sowohl alte als auch neue Werte schreiben dürfen).
+ALTER TABLE role_permissions MODIFY COLUMN permission
+  ENUM('helper','mod','admin','supporter','moderator','owner') NOT NULL;
+
+-- 2. Bestehende Rows auf neue Werte umstellen. No-op wenn schon migriert.
+UPDATE role_permissions SET permission = 'supporter' WHERE permission = 'helper';
+UPDATE role_permissions SET permission = 'moderator' WHERE permission = 'mod';
+UPDATE role_permissions SET permission = 'owner'     WHERE permission = 'admin';
+
+-- 3. ENUM auf die finale neue Menge reduzieren.
+ALTER TABLE role_permissions MODIFY COLUMN permission
+  ENUM('supporter','moderator','owner') NOT NULL;

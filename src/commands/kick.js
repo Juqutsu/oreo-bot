@@ -8,7 +8,7 @@ module.exports = {
     .addUserOption((user) => user.setName("target").setDescription("Spieler zum kicken").setRequired(true))
     .addStringOption((r) => r.setName("reason").setDescription("Grund fürs kicken").setRequired(false)),
 
-  requiredTier: 'admin',
+  requiredTier: 'owner',
 
   async execute(interaction) {
     

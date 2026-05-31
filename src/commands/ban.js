@@ -8,7 +8,7 @@ module.exports = {
     .addUserOption((option) => option.setName('target').setDescription('Wer soll gebannt werden?').setRequired(true))
     .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setRequired(false)),
 
-  requiredTier: 'admin',
+  requiredTier: 'owner',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');

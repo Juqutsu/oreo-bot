@@ -19,8 +19,8 @@ Stage 1 und 1.5 haben die Mod-Commands (`/warn`, `/timeout`, `/kick`, `/ban`, `/
 
 Das funktioniert für einen einzigen Server mit klassischer Discord-Permission-Struktur, aber:
 
-- **Keine feingranulare Trennung:** Helper, Mod, Admin sind alle "ModerateMembers" — `/ban` und `/warnings` sind für dieselbe Personengruppe zugänglich.
-- **Keine Server-spezifische Konfiguration:** Wer mit dem Bot arbeiten darf, ist Discord-Permission-getrieben. Server, die Mod-Rollen ohne `ModerateMembers`-Permission haben, sind ausgesperrt.
+- **Keine feingranulare Trennung:** Supporter, Moderator, Owner sind alle "ModerateMembers" — `/ban` und `/warnings` sind für dieselbe Personengruppe zugänglich.
+- **Keine Server-spezifische Konfiguration:** Wer mit dem Bot arbeiten darf, ist Discord-Permission-getrieben. Server, die Moderator-Rollen ohne `ModerateMembers`-Permission haben, sind ausgesperrt.
 - **`MODLOG_CHANNEL_ID` ist env-getrieben:** Multi-Guild-Betrieb ist heute nicht möglich.
 
 Stage 2a löst das Permission-Problem als Fundament für Stage 2b (`/config` Channels) und 2c (`/report`). Die `role_permissions`-Tabelle existiert seit Stage 1 als Placeholder und wird in dieser Stage **Single Source of Truth**.
@@ -31,21 +31,21 @@ Stage 2a löst das Permission-Problem als Fundament für Stage 2b (`/config` Cha
 
 1. `src/perms.js` — neues Modul: Tier-Resolver + Middleware-Helper
 2. `/setup` — owner-only Bootstrap-Command, schreibt initiale Tier-Zuweisungen
-3. `/config role set | unset | list` — Live-Editor für Tier-Zuweisungen, admin-tier-gegated
+3. `/config role set | unset | list` — Live-Editor für Tier-Zuweisungen, owner-tier-gegated
 4. Middleware im `InteractionCreate`-Handler von `index.js` — prüft `command.requiredTier` vor `execute()`
 5. Migration aller 11 bestehenden Commands auf das neue System
 6. Entfernung aller `setDefaultMemberPermissions(...)`-Aufrufe in Mod-Commands
-7. Lockout-Schutz: letzte Admin-Rolle kann nicht von einem Nicht-Owner-Admin entzogen werden
+7. Lockout-Schutz: letzte Owner-Tier-Rolle kann nicht von einem Nicht-Owner-Admin entzogen werden
 
 ## Nicht-Ziele
 
 - Keine `/config set`-Subcommands für Channels (`report_channel_id`, `mod_log_channel_id`) — **Stage 2b**
 - Keine `/config set automod_enabled`, kein `/config show` — **Stage 2b**
 - Keine `/report`-Implementation — **Stage 2c**
-- Keine Schema-Migration (`role_permissions` existiert bereits)
+- Keine NEUE Tabelle (`role_permissions` existiert seit Stage 1); nur ENUM-Rename via additive idempotente ALTER-Migration
 - Kein Cache für Tier-Lookups (per-Request `SELECT` ist günstig genug)
 - Keine bestätigenden Modale (kein "Bist du sicher?" — alle Aktionen sind reversibel via `/setup` oder `/config role`)
-- Keine Tier-Vererbung à la "admin macht alles was mod kann" jenseits des numerischen Vergleichs (admin ≥ mod ≥ helper)
+- Keine Tier-Vererbung à la "owner macht alles was moderator kann" jenseits des numerischen Vergleichs (owner ≥ moderator ≥ supporter)
 
 ---
 
@@ -58,29 +58,29 @@ src/
 ├── commands/
 │   ├── setup.js            (NEU)  — owner-only Bootstrap
 │   ├── config.js           (NEU)  — Subcommand-Group "role"
-│   ├── ping.js             (EDIT) — requiredTier: 'helper' + Default-Perms weg
-│   ├── warn.js             (EDIT) — requiredTier: 'mod'
-│   ├── timeout.js          (EDIT) — requiredTier: 'mod'
-│   ├── untimeout.js        (EDIT) — requiredTier: 'mod'
-│   ├── removewarn.js       (EDIT) — requiredTier: 'mod'
-│   ├── reason.js           (EDIT) — requiredTier: 'mod'
-│   ├── warnings.js         (EDIT) — requiredTier: 'helper'
-│   ├── modhistory.js       (EDIT) — requiredTier: 'helper'
-│   ├── case.js             (EDIT) — requiredTier: 'helper'
-│   ├── ban.js              (EDIT) — requiredTier: 'admin'
-│   ├── unban.js            (EDIT) — requiredTier: 'admin'
-│   └── kick.js             (EDIT) — requiredTier: 'admin'
+│   ├── ping.js             (EDIT) — requiredTier: 'supporter' + Default-Perms weg
+│   ├── warn.js             (EDIT) — requiredTier: 'moderator'
+│   ├── timeout.js          (EDIT) — requiredTier: 'moderator'
+│   ├── untimeout.js        (EDIT) — requiredTier: 'moderator'
+│   ├── removewarn.js       (EDIT) — requiredTier: 'moderator'
+│   ├── reason.js           (EDIT) — requiredTier: 'moderator'
+│   ├── warnings.js         (EDIT) — requiredTier: 'supporter'
+│   ├── modhistory.js       (EDIT) — requiredTier: 'supporter'
+│   ├── case.js             (EDIT) — requiredTier: 'supporter'
+│   ├── ban.js              (EDIT) — requiredTier: 'owner'
+│   ├── unban.js            (EDIT) — requiredTier: 'owner'
+│   └── kick.js             (EDIT) — requiredTier: 'owner'
 ```
 
-**Schema:** unverändert. `role_permissions` existiert seit Stage 1.
+**Schema:** Eine idempotente ALTER-Migration für die `role_permissions.permission`-ENUM (helper/mod/admin → supporter/moderator/owner) im 3-Schritt-Pattern (expand → UPDATE → shrink). Tabelle selbst existiert seit Stage 1.
 
 ### Design-Prinzipien
 
 - **Single Source of Truth:** `role_permissions` definiert alles. Kein Discord-Permission-Fallback.
-- **Owner-Privileg nur für `/setup`:** Server-Owner hat keinen automatischen `admin`-Tier. Er kann jederzeit `/setup` ausführen, um sich (oder andere) wieder Tier zuzuweisen. Das verhindert den finalen Lockout, ohne den Resolver zu komplizieren.
+- **Owner-Privileg nur für `/setup`:** Server-Owner hat keinen automatischen `owner`-Tier. Er kann jederzeit `/setup` ausführen, um sich (oder andere) wieder Tier zuzuweisen. Das verhindert den finalen Lockout, ohne den Resolver zu komplizieren.
 - **Middleware statt Pro-Command-Code:** Tier-Check läuft zentral im `InteractionCreate`-Handler von `index.js`. Commands deklarieren nur `requiredTier`, der Dispatcher gated. `loadCommands.js` bleibt ein reiner File-Loader.
 - **Orphan-tolerant:** Rollen, die auf Discord nicht mehr existieren, werden vom Resolver ignoriert. Cleanup ist Admin-Sache via `/config role unset`.
-- **Lockout-Schutz für Nicht-Owner:** Wer nicht Owner ist, kann nicht die letzte Admin-Rolle entziehen — Recovery-Pfad bliebe sonst nur Bot-Neustart mit DB-Eingriff.
+- **Lockout-Schutz für Nicht-Owner:** Wer nicht Owner ist, kann nicht die letzte Owner-Tier-Rolle entziehen — Recovery-Pfad bliebe sonst nur Bot-Neustart mit DB-Eingriff.
 
 ---
 
@@ -90,9 +90,9 @@ src/
 
 ```js
 const TIERS = {
-  helper: 1,
-  mod: 2,
-  admin: 3,
+  supporter: 1,
+  moderator: 2,
+  owner: 3,
 };
 ```
 
@@ -103,13 +103,13 @@ const TIERS = {
  * Liefert den höchsten Tier, den ein Member über seine Rollen hat.
  * Server-Owner hat KEINEN Sonderstatus (Single Source of Truth = role_permissions).
  * Ausnahme: /setup ist über die Owner-ID gegated, nicht über Tier.
- * @returns {Promise<'helper'|'mod'|'admin'|null>}
+ * @returns {Promise<'supporter'|'moderator'|'owner'|null>}
  */
 exports.getEffectiveTier = async (guildId, member) => string|null;
 
 /**
  * Prüft ob Member mindestens den geforderten Tier hat.
- * @param {'helper'|'mod'|'admin'} requiredTier
+ * @param {'supporter'|'moderator'|'owner'} requiredTier
  * @returns {Promise<boolean>}
  */
 exports.hasTier = async (guildId, member, requiredTier) => boolean;
@@ -170,7 +170,7 @@ Jeder Command-Export bekommt ein zusätzliches Feld:
 ```js
 module.exports = {
   data: new SlashCommandBuilder()...,
-  requiredTier: 'mod',   // 'helper' | 'mod' | 'admin' | null
+  requiredTier: 'moderator',   // 'supporter' | 'moderator' | 'owner' | null
   async execute(interaction) { ... },
 };
 ```
@@ -192,11 +192,11 @@ await command.execute(interaction);
 
 ### `setDefaultMemberPermissions` — wird entfernt
 
-Heute hat jeder Mod-Command `setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)`. Das versteckt den Command in Discord für User ohne diese Permission und kollidiert mit unserem neuen System: ein User mit `admin`-Tier in `role_permissions` ohne `ModerateMembers`-Permission würde den Command nicht sehen.
+Heute hat jeder Mod-Command `setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)`. Das versteckt den Command in Discord für User ohne diese Permission und kollidiert mit unserem neuen System: ein User mit `owner`-Tier in `role_permissions` ohne `ModerateMembers`-Permission würde den Command nicht sehen.
 
 **Lösung:** Alle `setDefaultMemberPermissions(...)` raus aus den 11 bestehenden Commands. Tier-Middleware ist der einzige Gate. Commands sind in Discord für jeden sichtbar, werden aber bei fehlendem Tier ephemeral abgewiesen.
 
-**Ausnahmen:** `/setup` und `/config` bekommen `setDefaultMemberPermissions(0)` → versteckt für alle außer Owner in der Discord-UI. Owner ignoriert Default-Perms; der echte Gate ist im Handler (Owner-Check bzw. `admin`-Tier).
+**Ausnahmen:** `/setup` und `/config` bekommen `setDefaultMemberPermissions(0)` → versteckt für alle außer Owner in der Discord-UI. Owner ignoriert Default-Perms; der echte Gate ist im Handler (Owner-Check bzw. `owner`-Tier).
 
 ### Fail-Trace
 
@@ -214,9 +214,9 @@ console.info(`[perms] ${interaction.user.tag} blocked from /${command.data.name}
 
 ```
 /setup
-  admin-role:<Role>      (REQUIRED) — bekommt 'admin'-Tier
-  mod-role:<Role>        (optional) — bekommt 'mod'-Tier
-  helper-role:<Role>     (optional) — bekommt 'helper'-Tier
+  owner-role:<Role>      (REQUIRED) — bekommt 'owner'-Tier
+  moderator-role:<Role>        (optional) — bekommt 'moderator'-Tier
+  supporter-role:<Role>     (optional) — bekommt 'supporter'-Tier
 ```
 
 Eine Rolle pro Tier. Wer mehrere Rollen je Tier braucht, nutzt `/config role set` hinterher.
@@ -243,8 +243,8 @@ if (interaction.user.id !== interaction.guild.ownerId) {
 ```sql
 START TRANSACTION;
 DELETE FROM role_permissions WHERE guild_id = ?;
-INSERT INTO role_permissions (guild_id, role_id, permission) VALUES (?,?,'admin');
--- mod-role/helper-role nur wenn übergeben
+INSERT INTO role_permissions (guild_id, role_id, permission) VALUES (?,?,'owner');
+-- moderator-role/supporter-role nur wenn übergeben
 COMMIT;
 ```
 
@@ -254,7 +254,7 @@ COMMIT;
 |---|---|
 | Rolle ist `@everyone` (`roleId === guildId`) | Abbruch: *"Die @everyone-Rolle kann nicht zugewiesen werden."* |
 | Rolle ist `role.managed` (Bot-/Integration-Rolle) | Abbruch: *"Bot-/Integration-Rollen können nicht zugewiesen werden."* |
-| Doppelte Rolle (admin-role === mod-role o.ä.) | Abbruch: *"Eine Rolle kann nicht mehreren Tiers zugewiesen werden."* |
+| Doppelte Rolle (owner-role === moderator-role o.ä.) | Abbruch: *"Eine Rolle kann nicht mehreren Tiers zugewiesen werden."* |
 | DB-Failure | Rollback + ephemeral *"Datenbankfehler — versuch's später."* |
 
 ### Reply-UX
@@ -287,12 +287,12 @@ Versteckt `/setup` für alle außer Owner.
 ### Slash-Schema
 
 ```
-/config role set    role:<Role> tier:<Choice:helper|mod|admin>
+/config role set    role:<Role> tier:<Choice:supporter|moderator|owner>
 /config role unset  role:<Role>
 /config role list
 ```
 
-Command-Level: `setDefaultMemberPermissions(0)` + Datei deklariert `requiredTier: 'admin'`. Owner kommt durch Default-Perms-Bypass auf den Command und scheitert dann am Tier-Check, wenn er keine `admin`-Rolle hat — konsistent mit der "Single Source of Truth"-Linie.
+Command-Level: `setDefaultMemberPermissions(0)` + Datei deklariert `requiredTier: 'owner'`. Owner kommt durch Default-Perms-Bypass auf den Command und scheitert dann am Tier-Check, wenn er keine `owner`-Rolle hat — konsistent mit der "Single Source of Truth"-Linie.
 
 ### `/config role set`
 
@@ -310,12 +310,12 @@ ON DUPLICATE KEY UPDATE permission = VALUES(permission);
 |---|---|
 | Rolle ist `@everyone` | Abbruch: *"Die @everyone-Rolle kann nicht zugewiesen werden."* |
 | Rolle ist `role.managed` | Abbruch: *"Bot-/Integration-Rollen können nicht zugewiesen werden."* |
-| Rolle hat bereits genau diesen Tier | Reply (no-op): *"Rolle @X war bereits Tier 'mod'."* |
+| Rolle hat bereits genau diesen Tier | Reply (no-op): *"Rolle @X war bereits Tier 'moderator'."* |
 | DB-Failure | Ephemeral *"Datenbankfehler — versuch's später."* |
 
 **Reply (Erfolg):**
-- Neu: *"Rolle @Moderatoren hat jetzt Tier 'mod'."*
-- Update: *"Rolle @Moderatoren wurde von Tier 'helper' auf 'mod' geändert."*
+- Neu: *"Rolle @Moderatoren hat jetzt Tier 'moderator'."*
+- Update: *"Rolle @Moderatoren wurde von Tier 'supporter' auf 'moderator' geändert."*
 
 ### `/config role unset`
 
@@ -323,19 +323,19 @@ ON DUPLICATE KEY UPDATE permission = VALUES(permission);
 
 **Lockout-Schutz (kritisch):**
 
-Wenn nach `DELETE` keine `admin`-Rolle mehr in der Guild ist UND der ausführende User nicht Server-Owner ist, dann Rollback + ephemeral:
+Wenn nach `DELETE` keine `owner`-Rolle mehr in der Guild ist UND der ausführende User nicht Server-Owner ist, dann Rollback + ephemeral:
 
-> *"Abbruch — das wäre die letzte Admin-Rolle. Setze erst eine andere Rolle auf 'admin' oder lass den Server-Owner das machen."*
+> *"Abbruch — das wäre die letzte Owner-Tier-Rolle. Setze erst eine andere Rolle auf 'owner' oder lass den Server-Owner das machen."*
 
 Server-Owner darf sich in den Lockout begeben (er kann eh per `/setup` raus), Nicht-Owner-Admins nicht.
 
-**Implementation:** Transaktion mit `SELECT ... FOR UPDATE` auf admin-rows zur Vermeidung von Race-Conditions:
+**Implementation:** Transaktion mit `SELECT ... FOR UPDATE` auf owner-rows zur Vermeidung von Race-Conditions:
 
 ```sql
 START TRANSACTION;
 DELETE FROM role_permissions WHERE guild_id = ? AND role_id = ?;
-SELECT COUNT(*) AS admin_count FROM role_permissions WHERE guild_id = ? AND permission = 'admin' FOR UPDATE;
--- wenn admin_count = 0 UND user.id !== guild.ownerId: ROLLBACK + ephemeral
+SELECT COUNT(*) AS owner_count FROM role_permissions WHERE guild_id = ? AND permission = 'owner' FOR UPDATE;
+-- wenn owner_count = 0 UND user.id !== guild.ownerId: ROLLBACK + ephemeral
 COMMIT;
 ```
 
@@ -345,7 +345,7 @@ COMMIT;
 
 ### `/config role list`
 
-**Verhalten:** Embed mit allen Zuweisungen, sortiert nach Tier (admin → mod → helper).
+**Verhalten:** Embed mit allen Zuweisungen, sortiert nach Tier (owner → moderator → supporter).
 
 ```
 🛡️ Permission-Konfiguration
@@ -396,7 +396,7 @@ Pro Command:
 -    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Verwarnung').setRequired(false))
 -    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 +    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Verwarnung').setRequired(false)),
-+  requiredTier: 'mod',
++  requiredTier: 'moderator',
 
    async execute(interaction) {
 ```
@@ -405,18 +405,18 @@ Pro Command:
 
 | Command | Tier |
 |---|---|
-| `/ping` | `helper` |
-| `/warnings` | `helper` |
-| `/modhistory` | `helper` |
-| `/case` | `helper` |
-| `/warn` | `mod` |
-| `/timeout` | `mod` |
-| `/untimeout` | `mod` |
-| `/removewarn` | `mod` |
-| `/reason` | `mod` |
-| `/ban` | `admin` |
-| `/unban` | `admin` |
-| `/kick` | `admin` |
+| `/ping` | `supporter` |
+| `/warnings` | `supporter` |
+| `/modhistory` | `supporter` |
+| `/case` | `supporter` |
+| `/warn` | `moderator` |
+| `/timeout` | `moderator` |
+| `/untimeout` | `moderator` |
+| `/removewarn` | `moderator` |
+| `/reason` | `moderator` |
+| `/ban` | `owner` |
+| `/unban` | `owner` |
+| `/kick` | `owner` |
 
 ### Was NICHT migriert wird
 
@@ -430,15 +430,15 @@ Pro Command:
 
 | Situation | Verhalten | DB-Zustand |
 |---|---|---|
-| User ohne Tier ruft `/warn` auf | Ephemeral *"Du brauchst Tier 'mod' oder höher"* | unverändert |
-| Owner ruft `/setup` ohne `admin-role` | Discord rejects (REQUIRED-Option fehlt) | unverändert |
+| User ohne Tier ruft `/warn` auf | Ephemeral *"Du brauchst Tier 'moderator' oder höher"* | unverändert |
+| Owner ruft `/setup` ohne `owner-role` | Discord rejects (REQUIRED-Option fehlt) | unverändert |
 | Nicht-Owner ruft `/setup` auf | Ephemeral *"Nur der Server-Inhaber kann /setup ausführen."* | unverändert |
 | `/setup` mit gleicher Rolle für 2 Tiers | Abbruch, ephemeral, kein DELETE | unverändert |
 | `/config role set` mit `@everyone` | Abbruch, ephemeral | unverändert |
-| `/config role unset` letzte Admin-Rolle, User ist nicht Owner | Rollback, ephemeral Lockout-Warnung | unverändert |
-| `/config role unset` letzte Admin-Rolle, User ist Owner | DELETE läuft durch | letzte Admin-Zeile entfernt |
+| `/config role unset` letzte Owner-Tier-Rolle, User ist nicht Owner | Rollback, ephemeral Lockout-Warnung | unverändert |
+| `/config role unset` letzte Owner-Tier-Rolle, User ist Owner | DELETE läuft durch | letzte Admin-Zeile entfernt |
 | Rolle wird auf Discord gelöscht, Eintrag bleibt in DB | Resolver ignoriert (orphan-tolerant) | unverändert; `/config role list` zeigt ⚠️ |
-| `role_permissions` leer + nicht-Owner ruft Mod-Cmd | Ephemeral *"Du brauchst Tier 'mod' …"* | unverändert |
+| `role_permissions` leer + nicht-Owner ruft Mod-Cmd | Ephemeral *"Du brauchst Tier 'moderator' …"* | unverändert |
 | DB unreachable beim Tier-Check | Middleware → ephemeral *"Datenbankfehler"* + console.error | unverändert |
 
 **Leitprinzip:** Tier-Checks sind günstig und idempotent. Fehler im Tier-Check führen NIE zu unauthorisierten Aktionen — bei Zweifel wird abgewiesen ("fail closed").
@@ -449,19 +449,19 @@ Pro Command:
 
 | # | Szenario | Erwartung |
 |---|---|---|
-| 1 | Frisches Deployment, Owner ruft `/setup admin-role:@Admins` | DB hat 1 Zeile, Reply listet Admin |
+| 1 | Frisches Deployment, Owner ruft `/setup owner-role:@Admins` | DB hat 1 Zeile, Reply listet Admin |
 | 2 | Nicht-Owner ruft `/setup …` | Ephemeral "Nur der Server-Inhaber …" |
-| 3 | Owner ruft `/setup` mit doppelter Rolle (admin=mod) | Ephemeral, kein DELETE |
-| 4 | User mit @Admins ruft `/ban` | Ban läuft durch (Tier admin ≥ admin) |
-| 5 | User mit @Moderatoren ruft `/ban` | Ephemeral "Tier admin oder höher" |
-| 6 | User mit @Moderatoren ruft `/warn` | Warn läuft durch (Tier mod ≥ mod) |
-| 7 | User mit @Helper ruft `/case 1` | Embed wird angezeigt (Tier helper ≥ helper) |
-| 8 | User mit @Helper ruft `/warn` | Ephemeral "Tier mod oder höher" |
-| 9 | User ohne zugewiesene Rolle ruft `/ping` | Ephemeral "Tier helper oder höher" |
-| 10 | Admin ruft `/config role set @Helper2 tier:helper` | Reply "@Helper2 hat jetzt Tier 'helper'" |
+| 3 | Owner ruft `/setup` mit doppelter Rolle (owner=moderator) | Ephemeral, kein DELETE |
+| 4 | User mit @Admins ruft `/ban` | Ban läuft durch (Tier owner ≥ owner) |
+| 5 | User mit @Moderatoren ruft `/ban` | Ephemeral "Tier owner oder höher" |
+| 6 | User mit @Moderatoren ruft `/warn` | Warn läuft durch (Tier moderator ≥ moderator) |
+| 7 | User mit @Helper ruft `/case 1` | Embed wird angezeigt (Tier supporter ≥ supporter) |
+| 8 | User mit @Helper ruft `/warn` | Ephemeral "Tier moderator oder höher" |
+| 9 | User ohne zugewiesene Rolle ruft `/ping` | Ephemeral "Tier supporter oder höher" |
+| 10 | Owner-Tier-User ruft `/config role set @Helper2 tier:supporter` | Reply "@Helper2 hat jetzt Tier 'supporter'" |
 | 11 | Admin ruft `/config role set` auf bereits gesetzte Rolle | Reply "wurde von X auf Y geändert" oder "war bereits …" |
-| 12 | Admin ruft `/config role unset` für eigene letzte Admin-Rolle | Rollback, Lockout-Warnung |
-| 13 | Owner ruft `/config role unset` für eigene letzte Admin-Rolle | DELETE läuft durch (Owner darf) |
+| 12 | Admin ruft `/config role unset` für eigene letzte Owner-Tier-Rolle | Rollback, Lockout-Warnung |
+| 13 | Owner ruft `/config role unset` für eigene letzte Owner-Tier-Rolle | DELETE läuft durch (Owner darf) |
 | 14 | `/config role list` mit gelöschter Discord-Rolle in DB | Eintrag mit ⚠️ Badge |
 | 15 | Owner ruft `/setup` zweimal mit verschiedenen Rollen | Erste Zuweisungen sind gelöscht, neue stehen |
 
@@ -479,7 +479,7 @@ Pro Command:
 4. PR mergen
 5. `docker compose up -d --build` auf Server
 6. **`node src/deployCommands.js` einmal manuell** — Slash-Schemas ändern sich (kein `default_member_permissions` mehr, plus `/setup` + `/config`)
-7. **Server-Owner führt sofort `/setup admin-role:@…` aus** — sonst sind ALLE Commands für ALLE gesperrt (Mod-Crew kann nichts mehr)
+7. **Server-Owner führt sofort `/setup owner-role:@…` aus** — sonst sind ALLE Commands für ALLE gesperrt (Mod-Crew kann nichts mehr)
 
 **Pre-Deploy-Warnung an Server-Owner:** Vor dem Merge eine Notiz im Operations-Channel:
 > *"Nach Update sofort `/setup` ausführen. Bis dahin können Mods nichts. Owner kann immer recovern."*

@@ -16,7 +16,7 @@ module.exports = {
       reason.setName('reason').setDescription('Grund für die Entbannung').setRequired(false),
     ),
 
-  requiredTier: 'admin',
+  requiredTier: 'owner',
 
   async autocomplete(interaction) {
     const query = interaction.options.getFocused().toLowerCase();

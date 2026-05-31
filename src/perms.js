@@ -2,9 +2,9 @@ const { MessageFlags } = require('discord.js');
 const { getPool } = require('./db');
 
 const TIERS = {
-  helper: 1,
-  mod: 2,
-  admin: 3,
+  supporter: 1,
+  moderator: 2,
+  owner: 3,
 };
 
 /**
@@ -12,7 +12,7 @@ const TIERS = {
  * Server-Owner hat KEINEN Sonderstatus (Single Source of Truth = role_permissions).
  * @param {string} guildId
  * @param {import('discord.js').GuildMember|null} member
- * @returns {Promise<'helper'|'mod'|'admin'|null>}
+ * @returns {Promise<'supporter'|'moderator'|'owner'|null>}
  */
 async function getEffectiveTier(guildId, member) {
   if (!member) return null;
