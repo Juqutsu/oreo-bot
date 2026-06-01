@@ -495,8 +495,9 @@ async function handleShow(interaction) {
   const automodOn = Boolean(guildRow?.automod_enabled);
   const automodLine = automodOn ? '✅ aktiv' : '❌ deaktiviert';
 
-  // Stats
-  const nextCase = guildRow?.next_case_number ? `#${Number(guildRow.next_case_number) + 1}` : '#1';
+  // Stats — next_case_number stores the LAST assigned (atomic LAST_INSERT_ID pattern in cases.js).
+  // Next-to-assign = stored + 1. If no row exists yet, the first case will be #1.
+  const nextCase = `#${guildRow ? Number(guildRow.next_case_number) + 1 : 1}`;
 
   // Roles (nach Tier gruppiert)
   const byTier = { owner: [], moderator: [], supporter: [] };
