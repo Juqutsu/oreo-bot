@@ -251,8 +251,8 @@ Neuer Helper in `src/commands/config.js` (lokal, kein eigenes Modul):
 async function collectReportPermWarnings(guild, channel) {
   const pool = getPool();
   const [rows] = await pool.execute(
-    `SELECT role_id FROM guild_role_tiers
-       WHERE guild_id = ? AND tier IN ('moderator', 'owner')`,
+    `SELECT role_id FROM role_permissions
+       WHERE guild_id = ? AND permission IN ('moderator', 'owner')`,
     [guild.id],
   );
 
@@ -271,7 +271,7 @@ async function collectReportPermWarnings(guild, channel) {
 }
 ```
 
-**Tabellenname-Bestätigung:** `guild_role_tiers` ist der korrekte Tabellenname (Stage 2a Schema). Wenn ein zukünftiger Refactor das umbenennt, wird der Plan das aktualisieren.
+**Tabellenname-Bestätigung:** `role_permissions` ist der korrekte Tabellenname (Stage 2a Schema, `permission` ENUM-Spalte mit Values `supporter|moderator|owner`).
 
 ### 5.3 Reply-Format
 
