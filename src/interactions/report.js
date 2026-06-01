@@ -22,6 +22,10 @@ const COLOR_RESOLVED_CASE = 0x57F287;
 const COLOR_RESOLVED_NONE = 0x95A5A6;
 const COLOR_DISMISSED     = 0xED4245;
 
+function actionLabel(action) {
+  return action.charAt(0).toUpperCase() + action.slice(1);
+}
+
 // ---------- Dispatcher ----------
 
 async function dispatch(interaction) {
@@ -184,11 +188,21 @@ async function handleResolveOpenSelect(interaction, reportId) {
 async function handleActionSelect(interaction, reportId) {
   const action = interaction.values[0]; // 'none' | 'warn' | 'timeout' | 'kick' | 'ban'
 
+  // Status re-check: another mod may have closed the report between the button click
+  // and this select submission. Cheaper to fail here than after the modal submit.
+  const report = await reports.getReport(reportId);
+  if (!report) {
+    return interaction.update({ content: 'Report existiert nicht (mehr).', components: [] });
+  }
+  if (report.status === 'resolved' || report.status === 'dismissed') {
+    return interaction.update({ content: 'Report wurde inzwischen abgeschlossen.', components: [] });
+  }
+
   // Per-action tier:
   const requiredActionTier = (action === 'kick' || action === 'ban') ? 'owner' : 'moderator';
-  if (!(await perms.hasTier(interaction.member, requiredActionTier))) {
+  if (!(await perms.hasTier(interaction.guildId, interaction.member, requiredActionTier))) {
     return interaction.update({
-      content: `Aktion **${action}** benötigt **${requiredActionTier}**-Tier.`,
+      content: `Aktion **${actionLabel(action)}** benötigt **${requiredActionTier}**-Tier.`,
       components: [],
     });
   }
@@ -196,7 +210,7 @@ async function handleActionSelect(interaction, reportId) {
   // Build action-specific modal
   const modal = new ModalBuilder()
     .setCustomId(`report:modal-resolve:${reportId}:${action}`)
-    .setTitle(action === 'none' ? `Report #${reportId} abschließen` : `Resolve: ${action}`);
+    .setTitle(action === 'none' ? `Report #${reportId} abschließen` : `Resolve: ${actionLabel(action)}`);
 
   if (action === 'none') {
     modal.addComponents(
@@ -217,6 +231,7 @@ async function handleActionSelect(interaction, reportId) {
           .setLabel('Dauer (z.B. 30s, 10m, 2h, 1t, 1w)')
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
+          .setMinLength(1)
           .setMaxLength(16)
           .setValue('60m'),
       ),
@@ -226,6 +241,7 @@ async function handleActionSelect(interaction, reportId) {
           .setLabel('Grund')
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
+          .setMinLength(1)
           .setMaxLength(500),
       ),
     );
@@ -238,6 +254,7 @@ async function handleActionSelect(interaction, reportId) {
           .setLabel('Grund')
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
+          .setMinLength(1)
           .setMaxLength(500),
       ),
     );
