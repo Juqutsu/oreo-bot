@@ -2,7 +2,8 @@ const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000; // 28 days — Discord API limi
 
 /**
  * Parses a duration string like "30s", "10m", "2h", "1t", "1w".
- * Returns milliseconds or null if invalid. "t" is German "Tag" (day).
+ * Returns milliseconds or null if invalid. Empty string returns null.
+ * "t" is German "Tag" (day).
  */
 function parseDuration(str) {
   const match = str.trim().match(/^(\d+)\s*(s|m|h|t|w)$/i);
