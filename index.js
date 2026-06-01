@@ -4,6 +4,7 @@ const { deployCommands } = require('./src/deployCommands');
 const { ping: pingDb } = require('./src/db');
 const { ensureSchema } = require('./src/schema');
 const perms = require('./src/perms');
+const reportInteractions = require('./src/interactions/report');
 
 const {
   DISCORD_TOKEN, CLIENT_ID, GUILD_ID,
@@ -29,50 +30,67 @@ client.once(Events.ClientReady, (c) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  const command = client.commands.get(interaction.commandName);
-  if (!command) return;
+  // Slash-command path (including autocomplete) — existing behavior, unchanged
+  if (interaction.isChatInputCommand() || interaction.isAutocomplete()) {
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return;
 
-  if (interaction.isAutocomplete()) {
-    if (typeof command.autocomplete !== 'function') return;
+    if (interaction.isAutocomplete()) {
+      if (typeof command.autocomplete !== 'function') return;
+      try {
+        await command.autocomplete(interaction);
+      } catch (err) {
+        console.error(`Autocomplete für "${interaction.commandName}" fehlgeschlagen:`, err);
+      }
+      return;
+    }
+
+    if (command.requiredTier) {
+      let allowed;
+      try {
+        allowed = await perms.requireTier(interaction, command.requiredTier);
+      } catch (err) {
+        console.error(`Tier-Check für "${interaction.commandName}" fehlgeschlagen:`, err);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'Beim Ausführen des Commands ist etwas schiefgegangen.',
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        }
+        return;
+      }
+      if (!allowed) {
+        console.info(`[perms] ${interaction.user.tag} blocked from /${interaction.commandName} (tier required: ${command.requiredTier})`);
+        return;
+      }
+    }
+
     try {
-      await command.autocomplete(interaction);
+      await command.execute(interaction);
     } catch (err) {
-      console.error(`Autocomplete für "${interaction.commandName}" fehlgeschlagen:`, err);
+      console.error(`Command "${interaction.commandName}" failed:`, err);
+      const reply = { content: 'Beim Ausführen des Commands ist etwas schiefgegangen.', flags: MessageFlags.Ephemeral };
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp(reply).catch(() => {});
+      } else {
+        await interaction.reply(reply).catch(() => {});
+      }
     }
     return;
   }
 
-  if (!interaction.isChatInputCommand()) return;
-
-  if (command.requiredTier) {
-    let allowed;
+  // Component path (button / string-select / modal-submit) — new
+  if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
     try {
-      allowed = await perms.requireTier(interaction, command.requiredTier);
-    } catch (err) {
-      console.error(`Tier-Check für "${interaction.commandName}" fehlgeschlagen:`, err);
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: 'Beim Ausführen des Commands ist etwas schiefgegangen.',
-          flags: MessageFlags.Ephemeral,
-        }).catch(() => {});
+      const handled = await reportInteractions.dispatch(interaction);
+      if (!handled) {
+        await interaction.reply({ content: 'Unbekannte Interaktion.', flags: MessageFlags.Ephemeral });
       }
-      return;
-    }
-    if (!allowed) {
-      console.info(`[perms] ${interaction.user.tag} blocked from /${interaction.commandName} (tier required: ${command.requiredTier})`);
-      return;
-    }
-  }
-
-  try {
-    await command.execute(interaction);
-  } catch (err) {
-    console.error(`Command "${interaction.commandName}" failed:`, err);
-    const reply = { content: 'Beim Ausführen des Commands ist etwas schiefgegangen.', flags: MessageFlags.Ephemeral };
-    if (interaction.deferred || interaction.replied) {
-      await interaction.followUp(reply).catch(() => {});
-    } else {
-      await interaction.reply(reply).catch(() => {});
+    } catch (e) {
+      console.error('[interactions] dispatch error', e);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: 'Fehler bei der Verarbeitung.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      }
     }
   }
 });
