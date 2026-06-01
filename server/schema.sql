@@ -144,3 +144,11 @@ ALTER TABLE reports ADD COLUMN message_id BIGINT UNSIGNED NULL;
 -- Duplikat-Check zu einem Index-Lookup.
 -- src/schema.js ignoriert ER_DUP_KEYNAME (1061) für Idempotenz.
 ALTER TABLE reports ADD INDEX idx_dup_check (guild_id, reporter_id, reported_user_id, status);
+
+-- ============================================================
+-- Stage 2d Migration: /case Reverse-Lookup Index
+-- ============================================================
+-- Speedup für reports.getReportByCaseNumber(guildId, caseNumber).
+-- Idempotent via schema-runner (errno 1061 swallowed in src/schema.js).
+
+ALTER TABLE reports ADD INDEX idx_resolution_case (guild_id, resolution_case_number);
