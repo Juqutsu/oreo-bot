@@ -39,6 +39,7 @@ async function dispatch(interaction) {
   if (kind === 'modal-resolve' && interaction.isModalSubmit())       { await handleModalResolve(interaction, reportId, parts[3]); return true; }
   if (kind === 'modal-dismiss' && interaction.isModalSubmit())       { await handleModalDismiss(interaction, reportId); return true; }
 
+  console.warn(`[report] unhandled customId kind=${kind} reportId=${reportId} interactionType=${interaction.type}`);
   return false;
 }
 
@@ -101,7 +102,7 @@ async function editReportMessage(guild, channelId, report, newState) {
     await msg.edit(newState);
     return true;
   } catch (e) {
-    console.warn(`[reports] cannot edit report message ${report.message_id}`, e?.code || e);
+    console.warn(`[report] cannot edit report message ${report.message_id}`, e?.code || e);
     return false;
   }
 }
@@ -112,8 +113,9 @@ async function handleClaim(interaction, reportId) {
   if (!(await perms.requireTier(interaction, 'moderator'))) return;
 
   const pool = getPool();
-  const conn = await pool.getConnection();
+  let conn;
   try {
+    conn = await pool.getConnection();
     await conn.beginTransaction();
     const report = await reports.getReport(reportId, { forUpdate: true, conn });
     if (!report) {
@@ -139,17 +141,17 @@ async function handleClaim(interaction, reportId) {
     await editReportMessage(interaction.guild, channelId, updated, buildClaimedState(updated));
     return interaction.reply({ content: `Du übernimmst Report #${reportId}.`, flags: MessageFlags.Ephemeral });
   } catch (e) {
-    await conn.rollback();
-    console.error('[reports] handleClaim error', e);
+    if (conn) await conn.rollback().catch(() => {});
+    console.error('[report] handleClaim error', e);
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: 'Fehler bei Übernehmen.', flags: MessageFlags.Ephemeral }).catch(() => {});
     }
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
 }
 
-// ---------- TODO: handleResolveOpenSelect, handleActionSelect, handleModalResolve, handleDismissOpenModal, handleModalDismiss ----------
+// ---------- Stub handlers (implemented in Tasks 5b / 5c / 5d) ----------
 
 async function handleResolveOpenSelect(interaction, reportId) {
   return interaction.reply({ content: '(not yet implemented — Task 5b)', flags: MessageFlags.Ephemeral });
