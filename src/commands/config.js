@@ -280,6 +280,37 @@ async function handleRoleList(interaction) {
 }
 
 
+const MAX_ROLES_IN_PERM_WARNING = 10;
+
+/**
+ * Sammelt moderator+ Rollen, die das angegebene Channel nicht sehen können.
+ * Liefert leeres Array bei keinen Blockern oder DB/Discord-Fehler (fail-soft).
+ * @param {import('discord.js').Guild} guild
+ * @param {import('discord.js').GuildChannel} channel
+ * @returns {Promise<string[]>} Array von Role-IDs (string)
+ */
+async function collectReportPermWarnings(guild, channel) {
+  const pool = getPool();
+  const [rows] = await pool.execute(
+    `SELECT role_id FROM role_permissions
+       WHERE guild_id = ? AND permission IN ('moderator', 'owner')`,
+    [guild.id],
+  );
+
+  const blocked = [];
+  for (const { role_id } of rows) {
+    const roleIdStr = String(role_id);
+    const role = guild.roles.cache.get(roleIdStr)
+      ?? await guild.roles.fetch(roleIdStr).catch(() => null);
+    if (!role) continue; // Rolle gelöscht → silent skip
+    const perms = channel.permissionsFor(role);
+    if (!perms || !perms.has(PermissionFlagsBits.ViewChannel)) {
+      blocked.push(role.id);
+    }
+  }
+  return blocked;
+}
+
 async function handleChannelSet(interaction) {
   const type = interaction.options.getString('type');
   const channel = interaction.options.getChannel('channel');
@@ -311,6 +342,17 @@ async function handleChannelSet(interaction) {
       content: `Mir fehlt die Permission 'Embed-Links' in <#${channel.id}>. Bitte zuerst beheben.`,
       flags: MessageFlags.Ephemeral,
     });
+  }
+
+  // Stage 2d: Report-Channel Permission-Check (Spec §5)
+  let permissionWarnings = [];
+  if (type === 'report') {
+    try {
+      permissionWarnings = await collectReportPermWarnings(interaction.guild, channel);
+    } catch (err) {
+      console.warn('collectReportPermWarnings failed:', err);
+      // fail-soft: kein Warning, Channel-Set läuft weiter
+    }
   }
 
   const column = CHANNEL_COLUMN[type];
@@ -345,6 +387,13 @@ async function handleChannelSet(interaction) {
     message = `Channel \`${label}\` von <#${previousId}> auf <#${channel.id}> geändert.`;
   } else {
     message = `Channel \`${label}\` gesetzt auf <#${channel.id}>.`;
+  }
+
+  if (permissionWarnings.length > 0) {
+    const shown = permissionWarnings.slice(0, MAX_ROLES_IN_PERM_WARNING).map(id => `<@&${id}>`).join(', ');
+    const overflow = permissionWarnings.length - MAX_ROLES_IN_PERM_WARNING;
+    const rolesList = overflow > 0 ? `${shown}, +${overflow} weitere` : shown;
+    message += `\n\n⚠️ Achtung: Folgende Mod-Rollen können den Channel nicht sehen: ${rolesList}\nBitte \`View Channel\`-Permission setzen, sonst sehen sie keine eingehenden Reports.`;
   }
 
   return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
