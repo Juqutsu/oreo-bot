@@ -266,7 +266,13 @@ async function handleChannelSet(interaction) {
   // Permission-Check für Bot
   const botMember = interaction.guild.members.me;
   const botPerms = channel.permissionsFor(botMember);
-  if (!botPerms?.has(PermissionFlagsBits.SendMessages)) {
+  if (!botPerms) {
+    return interaction.reply({
+      content: `Ich kann die Permissions in <#${channel.id}> nicht auslesen. Stehe ich noch auf dem Server?`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  if (!botPerms.has(PermissionFlagsBits.SendMessages)) {
     return interaction.reply({
       content: `Mir fehlt die Permission 'Nachrichten senden' in <#${channel.id}>. Bitte zuerst beheben.`,
       flags: MessageFlags.Ephemeral,
@@ -304,9 +310,14 @@ async function handleChannelSet(interaction) {
     });
   }
 
-  const message = previousId
-    ? `Channel \`${label}\` von <#${previousId}> auf <#${channel.id}> geändert.`
-    : `Channel \`${label}\` gesetzt auf <#${channel.id}>.`;
+  let message;
+  if (previousId === channel.id) {
+    message = `Channel \`${label}\` war bereits <#${channel.id}>.`;
+  } else if (previousId) {
+    message = `Channel \`${label}\` von <#${previousId}> auf <#${channel.id}> geändert.`;
+  } else {
+    message = `Channel \`${label}\` gesetzt auf <#${channel.id}>.`;
+  }
 
   return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
 }
