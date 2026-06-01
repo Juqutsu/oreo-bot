@@ -30,6 +30,7 @@ function buildOpenEmbed(reportId, reporter, target, reason, evidenceUrl, created
   return embed;
 }
 
+// customId pattern: report:<kind>:<reportId> — matched by the dispatcher in src/interactions/report.js
 function buildOpenButtons(reportId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`report:claim:${reportId}`).setLabel('Übernehmen').setStyle(ButtonStyle.Primary),
@@ -133,15 +134,25 @@ module.exports = {
 
     const embed = buildOpenEmbed(reportId, reporter, target, reason, evidenceUrl, Date.now());
     const row = buildOpenButtons(reportId);
+
+    let msg;
     try {
-      const msg = await reportChannel.send({ embeds: [embed], components: [row] });
-      await reports.attachMessageId(reportId, msg.id);
+      msg = await reportChannel.send({ embeds: [embed], components: [row] });
     } catch (e) {
       console.warn('[report] cannot post to report channel', e?.code || e);
       return interaction.reply({
         content: 'Der Bot kann nicht in den Report-Channel posten. Bitte Admin informieren.',
         flags: MessageFlags.Ephemeral,
       });
+    }
+
+    try {
+      await reports.attachMessageId(reportId, msg.id);
+    } catch (e) {
+      // Embed posted successfully but the DB row lost its message_id link.
+      // The reporter still sees success — the report exists, mods can still resolve it
+      // (the dispatcher's editReportMessage will fail-soft if message_id is NULL).
+      console.warn('[report] attachMessageId failed for reportId=' + reportId, e?.code || e);
     }
 
     // 7) cooldown + ack
