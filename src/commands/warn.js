@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 const config = require('../config');
+const { buildModLogEmbed } = require('../modlog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -98,19 +99,14 @@ module.exports = {
         return;
       }
       const logChannel = await interaction.client.channels.fetch(channelId);
-      const modEmbed = new EmbedBuilder()
-        .setTitle('⚠️ User verwarnt')
-        .setColor(0xfaa61a)
-        .setThumbnail(target.displayAvatarURL({ size: 256 }))
-        .addFields(
-          { name: '👤 User', value: `<@${target.id}>`, inline: false },
-          { name: '🛡️ Moderator', value: `<@${moderator.id}>`, inline: false },
-          { name: '📝 Grund', value: reasonForDisplay, inline: false },
-        );
-      if (dmFailed) {
-        modEmbed.addFields({ name: '📬 DM', value: 'Nicht zugestellt (DMs aus?)', inline: false });
-      }
-      modEmbed.setFooter({ text: `Case #${caseNumber} · 🐾` }).setTimestamp();
+      const modEmbed = buildModLogEmbed({
+        action: 'warn',
+        caseNumber,
+        target,
+        mod: moderator,
+        reason: reasonForDisplay,
+        dmFailed,
+      });
       await logChannel.send({ embeds: [modEmbed] });
     } catch (err) {
       console.warn('ModLog send failed:', err);

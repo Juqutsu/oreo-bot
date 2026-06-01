@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
 const config = require('../config');
+const { buildModLogEmbed } = require('../modlog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -87,17 +88,13 @@ module.exports = {
         return;
       }
       const logChannel = await interaction.client.channels.fetch(channelId);
-      const modEmbed = new EmbedBuilder()
-        .setTitle('User gekickt')
-        .setColor(0xed4245)
-        .setThumbnail(target.displayAvatarURL({ size: 256 }))
-        .addFields(
-          { name: '👤 User', value: `<@${target.id}>`, inline: false },
-          { name: '🛡️ Moderator', value: `<@${moderator.id}>`, inline: false },
-          { name: '📝 Grund', value: reason, inline: false },
-        )
-        .setFooter({ text: caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾' })
-        .setTimestamp();
+      const modEmbed = buildModLogEmbed({
+        action: 'kick',
+        caseNumber,
+        target,
+        mod: moderator,
+        reason,
+      });
       await logChannel.send({ embeds: [modEmbed] });
     } catch (e) {
       console.warn('ModLog send failed:', e);

@@ -13,8 +13,9 @@ const reports = require('../reports');
 const perms = require('../perms');
 const config = require('../config');
 const cases = require('../cases');
-const { parseDuration, formatDuration, MAX_TIMEOUT_MS } = require('../duration');
+const { parseDuration, MAX_TIMEOUT_MS } = require('../duration');
 const { getPool } = require('../db');
+const { buildModLogEmbed } = require('../modlog');
 
 const COLOR_OPEN          = 0xFEE75C;
 const COLOR_INVESTIGATING = 0x5865F2;
@@ -108,71 +109,6 @@ function buildDismissedState(report) {
     );
   if (report.resolution_note) embed.setFooter({ text: report.resolution_note });
   return { embeds: [embed], components: [] };
-}
-
-function buildModLogEmbed({ action, caseNumber, target, mod, reason, durationMs }) {
-  const fallbackFooter = caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾';
-
-  if (action === 'warn') {
-    return new EmbedBuilder()
-      .setTitle('⚠️ User verwarnt')
-      .setColor(0xfaa61a)
-      .setThumbnail(target.displayAvatarURL({ size: 256 }))
-      .addFields(
-        { name: '👤 User', value: `<@${target.id}>`, inline: false },
-        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
-        { name: '📝 Grund', value: reason ?? 'Kein Grund angegeben', inline: false },
-      )
-      .setFooter({ text: fallbackFooter })
-      .setTimestamp();
-  }
-
-  if (action === 'timeout') {
-    const expiresAtSec = Math.floor((Date.now() + durationMs) / 1000);
-    return new EmbedBuilder()
-      .setColor(0xfaa61a)
-      .setTitle('⏱️ Timeout vergeben')
-      .setThumbnail(target.displayAvatarURL({ dynamic: true }))
-      .addFields(
-        { name: 'User', value: `<@${target.id}> (${target.username})`, inline: true },
-        { name: 'Moderator', value: `<@${mod.id}> (${mod.username})`, inline: true },
-        { name: 'Grund', value: reason ?? 'Kein Grund angegeben' },
-        { name: 'Dauer', value: formatDuration(durationMs), inline: true },
-        { name: 'Läuft ab', value: `<t:${expiresAtSec}:f>`, inline: true },
-      )
-      .setFooter({ text: fallbackFooter })
-      .setTimestamp();
-  }
-
-  if (action === 'kick') {
-    return new EmbedBuilder()
-      .setTitle('User gekickt')
-      .setColor(0xed4245)
-      .setThumbnail(target.displayAvatarURL({ size: 256 }))
-      .addFields(
-        { name: '👤 User', value: `<@${target.id}>`, inline: false },
-        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
-        { name: '📝 Grund', value: reason ?? 'Kein Grund angegeben', inline: false },
-      )
-      .setFooter({ text: fallbackFooter })
-      .setTimestamp();
-  }
-
-  if (action === 'ban') {
-    return new EmbedBuilder()
-      .setTitle('🔨 User gebannt')
-      .setColor(0xed4245)
-      .setThumbnail(target.displayAvatarURL({ size: 256 }))
-      .addFields(
-        { name: '👤 User', value: `<@${target.id}>`, inline: false },
-        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
-        { name: '📝 Grund', value: reason ?? 'Kein Grund angegeben', inline: false },
-      )
-      .setFooter({ text: fallbackFooter })
-      .setTimestamp();
-  }
-
-  return null; // action === 'none' — no mod-log entry
 }
 
 async function editReportMessage(guild, channelId, report, newState) {

@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
 const config = require('../config');
 const { parseDuration, formatDuration, MAX_TIMEOUT_MS } = require('../duration');
+const { buildModLogEmbed } = require('../modlog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -123,7 +124,6 @@ module.exports = {
     }
 
     const durationLabel = formatDuration(durationMs);
-    const expiresAt = Math.floor((Date.now() + durationMs) / 1000);
 
     await interaction.reply({
       content: `**${target.username}** hat einen Timeout für **${durationLabel}** bekommen.`,
@@ -140,19 +140,14 @@ module.exports = {
         return;
       }
       const logChannel = await interaction.client.channels.fetch(channelId);
-      const embed = new EmbedBuilder()
-        .setColor(0xfaa61a)
-        .setTitle('⏱️ Timeout vergeben')
-        .setThumbnail(target.displayAvatarURL({ dynamic: true }))
-        .addFields(
-          { name: 'User', value: `${target} (${target.username})`, inline: true },
-          { name: 'Moderator', value: `${moderator.user} (${moderator.user.username})`, inline: true },
-          { name: 'Grund', value: reason },
-          { name: 'Dauer', value: durationLabel, inline: true },
-          { name: 'Läuft ab', value: `<t:${expiresAt}:f>`, inline: true },
-        )
-        .setFooter({ text: caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾' })
-        .setTimestamp();
+      const embed = buildModLogEmbed({
+        action: 'timeout',
+        caseNumber,
+        target,
+        mod: moderator,
+        reason,
+        durationMs,
+      });
       await logChannel.send({ embeds: [embed] });
     } catch (err) {
       console.warn('ModLog send failed:', err);
