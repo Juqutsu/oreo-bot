@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
+const config = require('../config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -76,7 +77,15 @@ module.exports = {
     });
 
     try {
-      const logChannel = await interaction.client.channels.fetch(process.env.MODLOG_CHANNEL_ID);
+      const channelId = await config.getModLogChannelId(interaction.guildId);
+      if (!channelId) {
+        await interaction.followUp({
+          content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#x>` ausführen.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const logChannel = await interaction.client.channels.fetch(channelId);
       const modEmbed = new EmbedBuilder()
         .setTitle('🔨 User gebannt')
         .setColor(0xed4245)
@@ -92,7 +101,7 @@ module.exports = {
     } catch (e) {
       console.warn('ModLog send failed:', e);
       await interaction.followUp({
-        content: 'Mod-Log-Eintrag fehlgeschlagen. Bitte `MODLOG_CHANNEL_ID` prüfen.',
+        content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
         flags: MessageFlags.Ephemeral,
       });
     }
