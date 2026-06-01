@@ -84,15 +84,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
     try {
       const handled = await reportInteractions.dispatch(interaction);
       if (!handled) {
-        await interaction.reply({ content: 'Unbekannte Interaktion.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: 'Unbekannte Interaktion.', flags: MessageFlags.Ephemeral }).catch(() => {});
       }
+      // Future feature dispatchers (escalation, automod) chain here:
+      // const handled = await reportInteractions.dispatch(interaction) || await escalationInteractions.dispatch(interaction);
     } catch (e) {
       console.error('[interactions] dispatch error', e);
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({ content: 'Fehler bei der Verarbeitung.', flags: MessageFlags.Ephemeral }).catch(() => {});
       }
     }
+    return;
   }
+
+  console.warn('[interactions] unrecognised interaction type', interaction.type);
 });
 
 (async () => {
