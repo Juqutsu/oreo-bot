@@ -77,7 +77,7 @@ src/
 ### Design-Prinzipien
 
 - **Single Source of Truth:** `role_permissions` definiert alles. Kein Discord-Permission-Fallback.
-- **Owner-Privileg nur für `/setup`:** Server-Owner hat keinen automatischen `owner`-Tier. Er kann jederzeit `/setup` ausführen, um sich (oder andere) wieder Tier zuzuweisen. Das verhindert den finalen Lockout, ohne den Resolver zu komplizieren.
+- **Discord-Server-Owner = implizites owner-Tier (Lockout-Schutz):** Der Discord-Server-Eigentümer (`interaction.guild.ownerId`) bekommt vom Resolver immer `'owner'` zurück, unabhängig von der `role_permissions`-Tabelle. Der Server-Eigentümer kann nie aus seinem eigenen Server ausgesperrt werden. `/setup` ist zusätzlich Server-Owner-gegated (für den Bootstrap-Reset-Fall) und kann nur vom Server-Eigentümer ausgeführt werden.
 - **Middleware statt Pro-Command-Code:** Tier-Check läuft zentral im `InteractionCreate`-Handler von `index.js`. Commands deklarieren nur `requiredTier`, der Dispatcher gated. `loadCommands.js` bleibt ein reiner File-Loader.
 - **Orphan-tolerant:** Rollen, die auf Discord nicht mehr existieren, werden vom Resolver ignoriert. Cleanup ist Admin-Sache via `/config role unset`.
 - **Lockout-Schutz für Nicht-Owner:** Wer nicht Owner ist, kann nicht die letzte Owner-Tier-Rolle entziehen — Recovery-Pfad bliebe sonst nur Bot-Neustart mit DB-Eingriff.

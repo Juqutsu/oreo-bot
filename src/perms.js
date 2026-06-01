@@ -9,13 +9,17 @@ const TIERS = {
 
 /**
  * Liefert den höchsten Tier, den ein Member über seine Rollen hat.
- * Server-Owner hat KEINEN Sonderstatus (Single Source of Truth = role_permissions).
+ * Sonderfall: Discord-Server-Owner kriegt immer 'owner'-Tier (Lockout-Schutz —
+ * der Server-Eigentümer kann nie aus seinem eigenen Server ausgesperrt werden).
  * @param {string} guildId
  * @param {import('discord.js').GuildMember|null} member
  * @returns {Promise<'supporter'|'moderator'|'owner'|null>}
  */
 async function getEffectiveTier(guildId, member) {
   if (!member) return null;
+
+  // Discord-Server-Owner ist immer owner-Tier (Lockout-Schutz, vor DB-Lookup).
+  if (member.id === member.guild?.ownerId) return 'owner';
 
   const [rows] = await getPool().execute(
     'SELECT role_id, permission FROM role_permissions WHERE guild_id = ?',
