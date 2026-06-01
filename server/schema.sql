@@ -125,3 +125,22 @@ UPDATE role_permissions SET permission = 'owner'     WHERE permission = 'admin';
 -- 3. ENUM auf die finale neue Menge reduzieren.
 ALTER TABLE role_permissions MODIFY COLUMN permission
   ENUM('supporter','moderator','owner') NOT NULL;
+
+-- =========================================================
+-- ALTER STATEMENTS (Stage 2c — report system extensions)
+-- =========================================================
+
+-- resolution_case_number: verlinkt den gelösten Report mit dem automatisch
+-- erstellten Infraction-Case.
+-- ADD COLUMN ohne IF NOT EXISTS (MySQL 8.x unterstützt IF NOT EXISTS nicht);
+-- src/schema.js ignoriert ER_DUP_FIELDNAME (1060) für Idempotenz.
+ALTER TABLE reports ADD COLUMN resolution_case_number INT UNSIGNED NULL;
+
+-- message_id: speichert die Discord-Embed-Message-ID für In-Place-Edits
+-- bei Status-Übergängen.
+ALTER TABLE reports ADD COLUMN message_id BIGINT UNSIGNED NULL;
+
+-- idx_dup_check: macht den (guild_id, reporter, target, status)
+-- Duplikat-Check zu einem Index-Lookup.
+-- src/schema.js ignoriert ER_DUP_KEYNAME (1061) für Idempotenz.
+ALTER TABLE reports ADD INDEX idx_dup_check (guild_id, reporter_id, reported_user_id, status);

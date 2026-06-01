@@ -31,6 +31,11 @@ async function ensureSchema() {
         console.warn('[schema] Skipped duplicate column (errno 1060):', err.sqlMessage);
         continue;
       }
+      // 1061 = ER_DUP_KEYNAME: index already exists — idempotent ADD INDEX
+      if (err.errno === 1061) {
+        console.warn('[schema] Skipped duplicate index (errno 1061):', err.sqlMessage);
+        continue;
+      }
       throw err;
     }
   }
