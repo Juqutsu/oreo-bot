@@ -154,10 +154,96 @@ async function handleClaim(interaction, reportId) {
 // ---------- Stub handlers (implemented in Tasks 5b / 5c / 5d) ----------
 
 async function handleResolveOpenSelect(interaction, reportId) {
-  return interaction.reply({ content: '(not yet implemented — Task 5b)', flags: MessageFlags.Ephemeral });
+  if (!(await perms.requireTier(interaction, 'moderator'))) return;
+
+  const report = await reports.getReport(reportId);
+  if (!report) {
+    return interaction.reply({ content: 'Report existiert nicht (mehr).', flags: MessageFlags.Ephemeral });
+  }
+  if (report.status === 'resolved' || report.status === 'dismissed') {
+    return interaction.reply({ content: 'Report ist bereits abgeschlossen.', flags: MessageFlags.Ephemeral });
+  }
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`report:action-select:${reportId}`)
+    .setPlaceholder('Aktion wählen')
+    .addOptions(
+      { label: 'None',    value: 'none',    description: 'Report ohne Action abschließen', emoji: '✅' },
+      { label: 'Warn',    value: 'warn',    description: 'Verwarnung aussprechen',         emoji: '⚠️' },
+      { label: 'Timeout', value: 'timeout', description: 'User timeout-en',                emoji: '⏱️' },
+      { label: 'Kick',    value: 'kick',    description: 'User kicken (owner-Tier)',       emoji: '👢' },
+      { label: 'Ban',     value: 'ban',     description: 'User bannen (owner-Tier)',       emoji: '🔨' },
+    );
+
+  return interaction.reply({
+    content: 'Aktion wählen:',
+    components: [new ActionRowBuilder().addComponents(select)],
+    flags: MessageFlags.Ephemeral,
+  });
 }
 async function handleActionSelect(interaction, reportId) {
-  return interaction.reply({ content: '(not yet implemented — Task 5b)', flags: MessageFlags.Ephemeral });
+  const action = interaction.values[0]; // 'none' | 'warn' | 'timeout' | 'kick' | 'ban'
+
+  // Per-action tier:
+  const requiredActionTier = (action === 'kick' || action === 'ban') ? 'owner' : 'moderator';
+  if (!(await perms.hasTier(interaction.member, requiredActionTier))) {
+    return interaction.update({
+      content: `Aktion **${action}** benötigt **${requiredActionTier}**-Tier.`,
+      components: [],
+    });
+  }
+
+  // Build action-specific modal
+  const modal = new ModalBuilder()
+    .setCustomId(`report:modal-resolve:${reportId}:${action}`)
+    .setTitle(action === 'none' ? `Report #${reportId} abschließen` : `Resolve: ${action}`);
+
+  if (action === 'none') {
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('resolution_note')
+          .setLabel('Notiz (optional)')
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(false)
+          .setMaxLength(500),
+      ),
+    );
+  } else if (action === 'timeout') {
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('duration')
+          .setLabel('Dauer (z.B. 30s, 10m, 2h, 1t, 1w)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(16)
+          .setValue('60m'),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('reason')
+          .setLabel('Grund')
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+          .setMaxLength(500),
+      ),
+    );
+  } else {
+    // warn / kick / ban → just reason
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('reason')
+          .setLabel('Grund')
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+          .setMaxLength(500),
+      ),
+    );
+  }
+
+  await interaction.showModal(modal);
 }
 async function handleModalResolve(interaction, reportId, action) {
   return interaction.reply({ content: '(not yet implemented — Task 5c)', flags: MessageFlags.Ephemeral });
