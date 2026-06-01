@@ -62,6 +62,18 @@ async function main() {
   assert.equal(row4.resolution_note, 'spam — warned', 'note saved');
   assert.ok(row4.resolved_at !== null, 'resolved_at set');
 
+  // --- getReportByCaseNumber (Stage 2d) ---
+  const found = await reports.getReportByCaseNumber(GUILD, 42);
+  assert.ok(found, 'reverse-lookup findet den Report');
+  assert.equal(String(found.id), String(reportId));
+  assert.equal(String(found.reporter_id), REPORTER);
+  assert.equal(String(found.reported_user_id), TARGET);
+  console.log('✓ getReportByCaseNumber findet Report via case_number=42');
+
+  const notFound = await reports.getReportByCaseNumber(GUILD, 0);
+  assert.equal(notFound, null, 'unbekannte case_number → null');
+  console.log('✓ getReportByCaseNumber liefert null bei unbekannter case_number');
+
   // --- Second report: None-path ---
   const reportId2 = await reports.createReport({
     guildId: GUILD,

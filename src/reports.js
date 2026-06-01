@@ -86,6 +86,25 @@ function touchCooldown(userId) {
   cooldown.set(userId, Date.now());
 }
 
+/**
+ * Sucht den Report, dessen Resolve-Aktion in einen bestimmten Case geflossen ist.
+ * Genutzt von /case <N> für die Reverse-Lookup-Anzeige (Stage 2d Spec §4.1).
+ *
+ * @param {string} guildId
+ * @param {number} caseNumber
+ * @returns {Promise<object|null>} { id, reporter_id, reported_user_id, created_at, message_id } oder null
+ */
+async function getReportByCaseNumber(guildId, caseNumber) {
+  const [rows] = await getPool().execute(
+    `SELECT id, reporter_id, reported_user_id, created_at, message_id
+       FROM reports
+      WHERE guild_id = ? AND resolution_case_number = ?
+      LIMIT 1`,
+    [guildId, caseNumber],
+  );
+  return rows[0] ?? null;
+}
+
 module.exports = {
   createReport,
   attachMessageId,
@@ -97,4 +116,5 @@ module.exports = {
   checkCooldown,
   touchCooldown,
   COOLDOWN_MS,
+  getReportByCaseNumber,
 };

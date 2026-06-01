@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
+const reports = require('../reports');
 
 const TYPE_LABELS = {
   warn: '⚠️ Verwarnung',
@@ -69,6 +70,22 @@ module.exports = {
 
     if (c.parent_case_number) {
       embed.addFields({ name: '🔗 Bezogen auf', value: `Case #${c.parent_case_number}`, inline: true });
+    }
+
+    // Stage 2d: Reverse-Lookup auf Report-Quelle (Spec §4.3)
+    let linkedReport = null;
+    try {
+      linkedReport = await reports.getReportByCaseNumber(interaction.guildId, c.case_number);
+    } catch (err) {
+      console.warn('getReportByCaseNumber failed:', err);
+      // fail-soft: zeige Case ohne Quelle-Info
+    }
+    if (linkedReport) {
+      embed.addFields({
+        name: '🚨 Quelle',
+        value: `Report #${linkedReport.id} von <@${linkedReport.reporter_id}>`,
+        inline: false,
+      });
     }
 
     if (c.duration_ms) {
