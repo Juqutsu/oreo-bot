@@ -477,10 +477,70 @@ async function handleModalResolve(interaction, reportId, action) {
   });
 }
 async function handleDismissOpenModal(interaction, reportId) {
-  return interaction.reply({ content: '(not yet implemented — Task 5d)', flags: MessageFlags.Ephemeral });
+  if (!(await perms.requireTier(interaction, 'moderator'))) return;
+
+  const report = await reports.getReport(reportId);
+  if (!report) {
+    return interaction.reply({ content: 'Report existiert nicht (mehr).', flags: MessageFlags.Ephemeral });
+  }
+  if (report.status === 'resolved' || report.status === 'dismissed') {
+    return interaction.reply({ content: 'Report ist bereits abgeschlossen.', flags: MessageFlags.Ephemeral });
+  }
+
+  const modal = new ModalBuilder()
+    .setCustomId(`report:modal-dismiss:${reportId}`)
+    .setTitle(`Report #${reportId} verwerfen`)
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('resolution_note')
+          .setLabel('Grund (optional)')
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(false)
+          .setMaxLength(500)
+          .setPlaceholder('z.B. Doppel-Report, kein Verstoß, …'),
+      ),
+    );
+  await interaction.showModal(modal);
 }
 async function handleModalDismiss(interaction, reportId) {
-  return interaction.reply({ content: '(not yet implemented — Task 5d)', flags: MessageFlags.Ephemeral });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const note = interaction.fields.getTextInputValue('resolution_note') || null;
+
+  // CAS update — atomic guard against concurrent resolve/dismiss
+  const pool = getPool();
+  let cas;
+  try {
+    [cas] = await pool.query(
+      `UPDATE reports
+          SET status='dismissed',
+              assigned_mod_id=?,
+              resolved_at=NOW(),
+              resolution_note=?
+        WHERE id=? AND status IN ('open','investigating')`,
+      [interaction.user.id, note, reportId],
+    );
+  } catch (e) {
+    console.error('[report] dismiss CAS update failed', e);
+    return interaction.editReply({ content: 'Datenbankfehler beim Verwerfen — versuch es nochmal.' });
+  }
+
+  if (cas.affectedRows === 0) {
+    // Race lost — another mod resolved/dismissed between button click and submit
+    return interaction.editReply({ content: 'Report wurde inzwischen von einem anderen Mod bearbeitet.' });
+  }
+
+  // Re-read for the embed render (so we have the full row + freshly-set note)
+  const report = await reports.getReport(reportId);
+  if (report) {
+    const channelId = await config.getReportChannelId(interaction.guildId).catch(() => null);
+    if (channelId) {
+      await editReportMessage(interaction.guild, channelId, report, buildDismissedState(report));
+    }
+  }
+
+  return interaction.editReply({ content: `Report #${reportId} verworfen.` });
 }
 
 module.exports = { dispatch };
