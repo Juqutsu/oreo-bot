@@ -425,9 +425,10 @@ async function handleFeatureSet(interaction) {
   const value = interaction.options.getBoolean('value');
   const column = FEATURE_COLUMN[name];
 
+  const pool = getPool();
   try {
-    await getPool().execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
-    await getPool().execute(
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await pool.execute(
       `UPDATE guilds SET ${column} = ? WHERE guild_id = ?`,
       [value ? 1 : 0, interaction.guildId],
     );
