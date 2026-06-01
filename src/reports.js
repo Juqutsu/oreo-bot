@@ -19,6 +19,9 @@ async function attachMessageId(reportId, messageId) {
 }
 
 async function getReport(reportId, { forUpdate = false, conn = null } = {}) {
+  if (forUpdate && !conn) {
+    throw new Error('getReport: forUpdate requires a caller-supplied conn (transaction)');
+  }
   const runner = conn ?? getPool();
   const sql = `SELECT * FROM reports WHERE id = ?${forUpdate ? ' FOR UPDATE' : ''}`;
   const [rows] = await runner.query(sql, [reportId]);

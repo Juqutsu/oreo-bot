@@ -12,6 +12,7 @@ async function main() {
   const pool = getPool();
 
   // Ensure parent guild row exists (FK constraint on reports.guild_id → guilds.guild_id)
+  // no-op upsert: ensures the guild row exists (FK target) without failing if it already does
   await pool.query(
     `INSERT INTO guilds (guild_id, next_case_number)
        VALUES (?, 1) ON DUPLICATE KEY UPDATE guild_id = guild_id`,
@@ -92,7 +93,7 @@ async function main() {
   reports.touchCooldown(REPORTER);
   const r1 = reports.checkCooldown(REPORTER);
   assert.ok(r1 > 0 && r1 <= reports.COOLDOWN_MS, 'cooldown active and within window');
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 200)); // robust enough on a loaded CI box
   const r2 = reports.checkCooldown(REPORTER);
   assert.ok(r2 < r1, 'cooldown ticks down');
 
