@@ -49,6 +49,10 @@ async function dispatch(interaction) {
 
 // ---------- Embed builders (used by all handlers) ----------
 
+function eingegangenField(report) {
+  return { name: 'Eingegangen', value: `<t:${Math.floor(new Date(report.created_at).getTime() / 1000)}:R>`, inline: true };
+}
+
 function buildEmbedBase(report) {
   const embed = new EmbedBuilder()
     .setTitle(`Report #${report.id}`)
@@ -60,7 +64,6 @@ function buildEmbedBase(report) {
   if (report.evidence_url) {
     embed.addFields({ name: 'Evidence', value: `[Link](${report.evidence_url})` });
   }
-  embed.addFields({ name: 'Eingegangen', value: `<t:${Math.floor(new Date(report.created_at).getTime() / 1000)}:R>`, inline: true });
   return embed;
 }
 
@@ -68,7 +71,10 @@ function buildClaimedState(report) {
   const embed = buildEmbedBase(report)
     .setColor(COLOR_INVESTIGATING)
     .setTitle(`🔵 Report #${report.id}`)
-    .addFields({ name: 'Status', value: `🔵 In Bearbeitung von <@${report.assigned_mod_id}>`, inline: true });
+    .addFields(
+      { name: 'Status', value: `🔵 In Bearbeitung von <@${report.assigned_mod_id}>`, inline: true },
+      eingegangenField(report),
+    );
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`report:resolve:${report.id}`).setLabel('Resolve').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`report:dismiss:${report.id}`).setLabel('Verwerfen').setStyle(ButtonStyle.Danger),
@@ -84,7 +90,10 @@ function buildResolvedState(report, action, caseNumber) {
   const statusValue = isNone
     ? `✅ Resolved von <@${report.assigned_mod_id}> → Keine Action`
     : `✅ Resolved von <@${report.assigned_mod_id}> → ${action} (Case #${caseNumber})`;
-  embed.addFields({ name: 'Status', value: statusValue, inline: true });
+  embed.addFields(
+    { name: 'Status', value: statusValue, inline: true },
+    eingegangenField(report),
+  );
   if (report.resolution_note) embed.setFooter({ text: report.resolution_note });
   return { embeds: [embed], components: [] };
 }
@@ -93,7 +102,10 @@ function buildDismissedState(report) {
   const embed = buildEmbedBase(report)
     .setColor(COLOR_DISMISSED)
     .setTitle(`🚫 Report #${report.id}`)
-    .addFields({ name: 'Status', value: `🚫 Verworfen von <@${report.assigned_mod_id}>`, inline: true });
+    .addFields(
+      { name: 'Status', value: `🚫 Verworfen von <@${report.assigned_mod_id}>`, inline: true },
+      eingegangenField(report),
+    );
   if (report.resolution_note) embed.setFooter({ text: report.resolution_note });
   return { embeds: [embed], components: [] };
 }
