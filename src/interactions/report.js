@@ -379,7 +379,7 @@ async function handleModalResolve(interaction, reportId, action) {
       const auditReason = `${interaction.user.tag}: ${reason}`;
       if (action === 'timeout') await targetMember.timeout(durationMs, auditReason);
       else if (action === 'kick') await targetMember.kick(auditReason);
-      else if (action === 'ban')  await interaction.guild.bans.create(targetId, { reason: auditReason });
+      else if (action === 'ban')  await interaction.guild.members.ban(targetId, { reason: auditReason });
       // warn → no discord action
     } catch (e) {
       console.error('[report] discord action failed', e);
@@ -450,25 +450,22 @@ async function handleModalResolve(interaction, reportId, action) {
 
   // 8. Post mod-log embed (fail-soft, only for action !== 'none')
   if (action !== 'none') {
-    try {
-      const modLogChannelId = await config.getModLogChannelId(interaction.guildId);
-      if (modLogChannelId) {
-        const modLogChannel = await interaction.client.channels.fetch(modLogChannelId).catch(() => null);
-        if (modLogChannel) {
-          const modLogEmbed = buildModLogEmbed({
-            action, caseNumber,
-            target: targetUser,
-            mod: interaction.user,
-            reason,
-            durationMs,
-          });
-          if (modLogEmbed) {
-            await modLogChannel.send({ embeds: [modLogEmbed] }).catch(e => console.warn('[report] modlog send failed', e?.code || e));
-          }
+    const modLogChannelId = await config.getModLogChannelId(interaction.guildId).catch(() => null);
+    if (modLogChannelId) {
+      const modLogChannel = await interaction.client.channels.fetch(modLogChannelId).catch(() => null);
+      if (modLogChannel) {
+        const modLogEmbed = buildModLogEmbed({
+          action, caseNumber,
+          target: targetUser,
+          mod: interaction.user,
+          reason,
+          durationMs,
+        });
+        if (modLogEmbed) {
+          await modLogChannel.send({ embeds: [modLogEmbed] })
+            .catch(e => console.warn('[report] modlog send failed', e?.code || e));
         }
       }
-    } catch (e) {
-      console.warn('[report] modlog post failed', e?.code || e);
     }
   }
 
