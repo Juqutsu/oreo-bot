@@ -26,6 +26,15 @@ const CHANNEL_LABEL = {
   modlog: 'modlog',
 };
 
+const FEATURE_CHOICES = [
+  { name: 'automod', value: 'automod' },
+];
+
+// feature → DB-Spalte
+const FEATURE_COLUMN = {
+  automod: 'automod_enabled',
+};
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('config')
@@ -60,6 +69,14 @@ module.exports = {
         .addSubcommand((sub) =>
           sub.setName('list').setDescription('Zeigt beide Channels.')
         )
+    )
+    .addSubcommandGroup((group) =>
+      group.setName('feature').setDescription('Feature-Toggles')
+        .addSubcommand((sub) =>
+          sub.setName('set').setDescription('Schaltet ein Feature ein oder aus.')
+            .addStringOption((o) => o.setName('name').setDescription('Feature-Name').setRequired(true).addChoices(...FEATURE_CHOICES))
+            .addBooleanOption((o) => o.setName('value').setDescription('true = aktivieren, false = deaktivieren').setRequired(true))
+        )
     ),
 
   requiredTier: 'owner',
@@ -78,6 +95,10 @@ module.exports = {
       if (sub === 'set')   return handleChannelSet(interaction);
       if (sub === 'unset') return handleChannelUnset(interaction);
       if (sub === 'list')  return handleChannelList(interaction);
+    }
+
+    if (group === 'feature') {
+      if (sub === 'set') return handleFeatureSet(interaction);
     }
 
     return interaction.reply({
@@ -397,4 +418,33 @@ async function handleChannelList(interaction) {
     .setFooter({ text: '🐾 Oreo' });
 
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
+async function handleFeatureSet(interaction) {
+  const name = interaction.options.getString('name');
+  const value = interaction.options.getBoolean('value');
+  const column = FEATURE_COLUMN[name];
+
+  try {
+    await getPool().execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await getPool().execute(
+      `UPDATE guilds SET ${column} = ? WHERE guild_id = ?`,
+      [value ? 1 : 0, interaction.guildId],
+    );
+  } catch (err) {
+    console.error('/config feature set DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  let message;
+  if (name === 'automod' && value) {
+    message = `Feature \`automod\` aktiviert.\n⚠️ Automod-Logik ist erst ab Stage 4 implementiert. Toggle ist heute ein Stub.`;
+  } else {
+    message = `Feature \`${name}\` ${value ? 'aktiviert' : 'deaktiviert'}.`;
+  }
+
+  return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
 }
