@@ -77,6 +77,9 @@ module.exports = {
             .addStringOption((o) => o.setName('name').setDescription('Feature-Name').setRequired(true).addChoices(...FEATURE_CHOICES))
             .addBooleanOption((o) => o.setName('value').setDescription('true = aktivieren, false = deaktivieren').setRequired(true))
         )
+    )
+    .addSubcommand((sub) =>
+      sub.setName('show').setDescription('Zeigt die komplette Server-Konfiguration.')
     ),
 
   requiredTier: 'owner',
@@ -99,6 +102,10 @@ module.exports = {
 
     if (group === 'feature') {
       if (sub === 'set') return handleFeatureSet(interaction);
+    }
+
+    if (group === null && sub === 'show') {
+      return handleShow(interaction);
     }
 
     return interaction.reply({
@@ -448,4 +455,72 @@ async function handleFeatureSet(interaction) {
   }
 
   return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+}
+
+async function handleShow(interaction) {
+  let guildRow;
+  let roleRows;
+  try {
+    const pool = getPool();
+    const [gRows] = await pool.execute(
+      'SELECT mod_log_channel_id, report_channel_id, automod_enabled, next_case_number FROM guilds WHERE guild_id = ?',
+      [interaction.guildId],
+    );
+    guildRow = gRows[0] ?? null;
+    const [rRows] = await pool.execute(
+      'SELECT role_id, permission FROM role_permissions WHERE guild_id = ?',
+      [interaction.guildId],
+    );
+    roleRows = rRows;
+  } catch (err) {
+    console.error('/config show DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // Channels
+  const reportId = guildRow?.report_channel_id ? String(guildRow.report_channel_id) : null;
+  const modlogDbId = guildRow?.mod_log_channel_id ? String(guildRow.mod_log_channel_id) : null;
+  const modlogEnvId = !modlogDbId && process.env.MODLOG_CHANNEL_ID ? process.env.MODLOG_CHANNEL_ID : null;
+
+  const reportLine = reportId ? `<#${reportId}>` : '(nicht konfiguriert)';
+  let modlogLine;
+  if (modlogDbId) modlogLine = `<#${modlogDbId}>`;
+  else if (modlogEnvId) modlogLine = `<#${modlogEnvId}> *(env-Fallback)*`;
+  else modlogLine = '(nicht konfiguriert)';
+
+  // Features
+  const automodOn = Boolean(guildRow?.automod_enabled);
+  const automodLine = automodOn ? '✅ aktiv' : '❌ deaktiviert';
+
+  // Stats
+  const nextCase = guildRow?.next_case_number ? `#${Number(guildRow.next_case_number) + 1}` : '#1';
+
+  // Roles (nach Tier gruppiert)
+  const byTier = { owner: [], moderator: [], supporter: [] };
+  for (const r of roleRows) {
+    const rid = String(r.role_id);
+    const stillExists = interaction.guild.roles.cache.has(rid);
+    const display = stillExists ? `<@&${rid}>` : `<@&${rid}> ⚠️`;
+    byTier[r.permission]?.push(display);
+  }
+  const roleLines = TIER_ORDER
+    .map((t) => `**${t.toUpperCase()}**: ${byTier[t].length > 0 ? byTier[t].join(', ') : '—'}`)
+    .join('\n');
+  const rolesValue = roleRows.length > 0 ? roleLines : '(keine Rollen konfiguriert)';
+
+  const embed = new EmbedBuilder()
+    .setTitle('🛡️ Server-Konfiguration')
+    .setColor(0x5865f2)
+    .addFields(
+      { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}`, inline: false },
+      { name: '⚙️ Features',     value: `Automod: ${automodLine}`,                       inline: false },
+      { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
+      { name: '🔐 Rollen-Tiers', value: rolesValue,                                       inline: false },
+    )
+    .setFooter({ text: '🐾 Oreo' });
+
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
