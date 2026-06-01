@@ -98,6 +98,71 @@ function buildDismissedState(report) {
   return { embeds: [embed], components: [] };
 }
 
+function buildModLogEmbed({ action, caseNumber, target, mod, reason, durationMs }) {
+  const fallbackFooter = caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾';
+
+  if (action === 'warn') {
+    return new EmbedBuilder()
+      .setTitle('⚠️ User verwarnt')
+      .setColor(0xfaa61a)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: '👤 User', value: `<@${target.id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
+        { name: '📝 Grund', value: reason ?? 'Kein Grund angegeben', inline: false },
+      )
+      .setFooter({ text: fallbackFooter })
+      .setTimestamp();
+  }
+
+  if (action === 'timeout') {
+    const expiresAtSec = Math.floor((Date.now() + durationMs) / 1000);
+    return new EmbedBuilder()
+      .setColor(0xfaa61a)
+      .setTitle('⏱️ Timeout vergeben')
+      .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+      .addFields(
+        { name: 'User', value: `<@${target.id}> (${target.username})`, inline: true },
+        { name: 'Moderator', value: `<@${mod.id}> (${mod.username})`, inline: true },
+        { name: 'Grund', value: reason ?? 'Kein Grund angegeben' },
+        { name: 'Dauer', value: formatDuration(durationMs), inline: true },
+        { name: 'Läuft ab', value: `<t:${expiresAtSec}:f>`, inline: true },
+      )
+      .setFooter({ text: fallbackFooter })
+      .setTimestamp();
+  }
+
+  if (action === 'kick') {
+    return new EmbedBuilder()
+      .setTitle('User gekickt')
+      .setColor(0xed4245)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: '👤 User', value: `<@${target.id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
+        { name: '📝 Grund', value: reason ?? 'Kein Grund angegeben', inline: false },
+      )
+      .setFooter({ text: fallbackFooter })
+      .setTimestamp();
+  }
+
+  if (action === 'ban') {
+    return new EmbedBuilder()
+      .setTitle('🔨 User gebannt')
+      .setColor(0xed4245)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: '👤 User', value: `<@${target.id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
+        { name: '📝 Grund', value: reason ?? 'Kein Grund angegeben', inline: false },
+      )
+      .setFooter({ text: fallbackFooter })
+      .setTimestamp();
+  }
+
+  return null; // action === 'none' — no mod-log entry
+}
+
 async function editReportMessage(guild, channelId, report, newState) {
   if (!report.message_id) return false; // fail-soft: no message to edit
   try {
@@ -263,7 +328,156 @@ async function handleActionSelect(interaction, reportId) {
   await interaction.showModal(modal);
 }
 async function handleModalResolve(interaction, reportId, action) {
-  return interaction.reply({ content: '(not yet implemented — Task 5c)', flags: MessageFlags.Ephemeral });
+  // Defer ephemeral — Discord requires a response within 3s; we do DB + Discord-API
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  // 1. Parse modal fields per action
+  const reason = action === 'none' ? null : interaction.fields.getTextInputValue('reason');
+  const note   = action === 'none'
+    ? (interaction.fields.getTextInputValue('resolution_note') || null)
+    : reason;
+
+  let durationMs = null;
+  if (action === 'timeout') {
+    const durationInput = interaction.fields.getTextInputValue('duration');
+    durationMs = parseDuration(durationInput);
+    if (!durationMs) {
+      return interaction.editReply({ content: 'Ungültige Dauer. Nutze z.B. `30s`, `10m`, `2h`, `1t`, `1w`.' });
+    }
+    if (durationMs > MAX_TIMEOUT_MS) {
+      return interaction.editReply({ content: 'Maximale Timeout-Dauer ist 28 Tage.' });
+    }
+  }
+
+  // 2. Cheap pre-check
+  const report = await reports.getReport(reportId);
+  if (!report) {
+    return interaction.editReply({ content: 'Report existiert nicht (mehr).' });
+  }
+  if (report.status === 'resolved' || report.status === 'dismissed') {
+    return interaction.editReply({ content: 'Report wurde inzwischen von einem anderen Mod bearbeitet.' });
+  }
+
+  // 3. Resolve target
+  const targetId = report.reported_user_id.toString();
+  const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+  const targetUser = targetMember?.user
+    ?? await interaction.client.users.fetch(targetId).catch(() => null);
+
+  if ((action === 'kick' || action === 'timeout') && !targetMember) {
+    return interaction.editReply({ content: 'User ist nicht mehr auf dem Server — Aktion nicht möglich.' });
+  }
+  if (action !== 'none' && !targetUser) {
+    return interaction.editReply({ content: 'User konnte nicht aufgelöst werden.' });
+  }
+
+  // 4. Execute Discord-action (warn has none; cases is the only record for warn)
+  let caseNumber = null;
+
+  if (action !== 'none') {
+    try {
+      const auditReason = `${interaction.user.tag}: ${reason}`;
+      if (action === 'timeout') await targetMember.timeout(durationMs, auditReason);
+      else if (action === 'kick') await targetMember.kick(auditReason);
+      else if (action === 'ban')  await interaction.guild.bans.create(targetId, { reason: auditReason });
+      // warn → no discord action
+    } catch (e) {
+      console.error('[report] discord action failed', e);
+      return interaction.editReply({ content: `Konnte ${actionLabel(action)} nicht ausführen: ${e?.message ?? 'Discord-Fehler'}.` });
+    }
+
+    // 5. Create Case
+    try {
+      const result = await cases.createCase({
+        guildId: interaction.guildId,
+        userId: targetId,
+        moderatorId: interaction.user.id,
+        type: action,
+        reason,
+        durationMs: action === 'timeout' ? BigInt(durationMs) : undefined,
+        expiresAt:  action === 'timeout' ? new Date(Date.now() + durationMs) : undefined,
+      });
+      caseNumber = result.caseNumber;
+    } catch (e) {
+      console.error('[report] createCase failed', e);
+      return interaction.editReply({
+        content: `Aktion ${actionLabel(action)} wurde ausgeführt, aber Case-Erstellung fehlgeschlagen — bitte manuell mit \`/reason\` nachtragen.`,
+      });
+    }
+  }
+
+  // 6. CAS update on reports row
+  const pool = getPool();
+  let cas;
+  try {
+    [cas] = await pool.query(
+      `UPDATE reports
+          SET status='resolved',
+              assigned_mod_id=?,
+              resolved_at=NOW(),
+              resolution_note=?,
+              resolution_case_number=?
+        WHERE id=? AND status IN ('open','investigating')`,
+      [interaction.user.id, note, caseNumber, reportId],
+    );
+  } catch (e) {
+    console.error('[report] CAS update failed', e);
+    return interaction.editReply({
+      content: action === 'none'
+        ? 'Datenbankfehler beim Abschließen — versuch es nochmal.'
+        : `Aktion ${actionLabel(action)} ausgeführt (Case #${caseNumber}), aber Report-Status konnte nicht gespeichert werden.`,
+    });
+  }
+
+  if (cas.affectedRows === 0) {
+    // Race lost: another mod already resolved/dismissed
+    return interaction.editReply({
+      content: action === 'none'
+        ? 'Report wurde inzwischen von einem anderen Mod bearbeitet.'
+        : `Aktion ${actionLabel(action)} wurde ausgeführt und Case #${caseNumber} erstellt, aber der Report wurde inzwischen von einem anderen Mod abgeschlossen.`,
+    });
+  }
+
+  // 7. Edit report-channel embed (fail-soft)
+  const updatedReport = {
+    ...report,
+    status: 'resolved',
+    assigned_mod_id: interaction.user.id,
+    resolution_note: note,
+  };
+  const reportChannelId = await config.getReportChannelId(interaction.guildId);
+  await editReportMessage(interaction.guild, reportChannelId, updatedReport, buildResolvedState(updatedReport, action, caseNumber));
+
+  // 8. Post mod-log embed (fail-soft, only for action !== 'none')
+  if (action !== 'none') {
+    try {
+      const modLogChannelId = await config.getModLogChannelId(interaction.guildId);
+      if (modLogChannelId) {
+        const modLogChannel = await interaction.client.channels.fetch(modLogChannelId).catch(() => null);
+        if (modLogChannel) {
+          const modLogEmbed = buildModLogEmbed({
+            action, caseNumber,
+            target: targetUser,
+            mod: interaction.user,
+            reason,
+            durationMs,
+          });
+          if (modLogEmbed) {
+            await modLogChannel.send({ embeds: [modLogEmbed] }).catch(e => console.warn('[report] modlog send failed', e?.code || e));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[report] modlog post failed', e?.code || e);
+    }
+  }
+
+  // 9. Success ack
+  return interaction.editReply({
+    content: action === 'none'
+      ? `Report #${reportId} ohne Action abgeschlossen.`
+      : `Report #${reportId} als **${actionLabel(action)}** resolved (Case #${caseNumber}).`,
+  });
 }
 async function handleDismissOpenModal(interaction, reportId) {
   return interaction.reply({ content: '(not yet implemented — Task 5d)', flags: MessageFlags.Ephemeral });
