@@ -87,24 +87,24 @@ module.exports = {
         return;
       }
       const logChannel = await interaction.client.channels.fetch(channelId);
-          const modEmbed = new EmbedBuilder()
-            .setTitle('User gekickt')
-            .setColor(0xed4245)
-            .setThumbnail(target.displayAvatarURL({ size: 256 }))
-            .addFields(
-              { name: '👤 User', value: `<@${target.id}>`, inline: false },
-              { name: '🛡️ Moderator', value: `<@${moderator.id}>`, inline: false },
-              { name: '📝 Grund', value: reason, inline: false },
-            )
-            .setFooter({ text: caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾' })
-            .setTimestamp();
-          await logChannel.send({ embeds: [modEmbed] });
-        } catch (e) {
-          console.warn('ModLog send failed:', e);
-          await interaction.followUp({
-            content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
-            flags: MessageFlags.Ephemeral,
-          });
+      const modEmbed = new EmbedBuilder()
+        .setTitle('User gekickt')
+        .setColor(0xed4245)
+        .setThumbnail(target.displayAvatarURL({ size: 256 }))
+        .addFields(
+          { name: '👤 User', value: `<@${target.id}>`, inline: false },
+          { name: '🛡️ Moderator', value: `<@${moderator.id}>`, inline: false },
+          { name: '📝 Grund', value: reason, inline: false },
+        )
+        .setFooter({ text: caseNumber ? `Case #${caseNumber} · 🐾` : 'Case-Eintrag fehlgeschlagen · 🐾' })
+        .setTimestamp();
+      await logChannel.send({ embeds: [modEmbed] });
+    } catch (e) {
+      console.warn('ModLog send failed:', e);
+      await interaction.followUp({
+        content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
+        flags: MessageFlags.Ephemeral,
+      });
         }
 
   },
