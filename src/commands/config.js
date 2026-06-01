@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
 const { getPool } = require('../db');
 
 const TIER_CHOICES = [
@@ -8,6 +8,23 @@ const TIER_CHOICES = [
 ];
 
 const TIER_ORDER = ['owner', 'moderator', 'supporter'];
+
+const CHANNEL_TYPE_CHOICES = [
+  { name: 'report', value: 'report' },
+  { name: 'modlog', value: 'modlog' },
+];
+
+// type → DB-Spalte
+const CHANNEL_COLUMN = {
+  report: 'report_channel_id',
+  modlog: 'mod_log_channel_id',
+};
+
+// type → User-facing Label
+const CHANNEL_LABEL = {
+  report: 'report',
+  modlog: 'modlog',
+};
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -28,6 +45,21 @@ module.exports = {
         .addSubcommand((sub) =>
           sub.setName('list').setDescription('Zeigt alle Rollen-Tier-Zuweisungen.')
         )
+    )
+    .addSubcommandGroup((group) =>
+      group.setName('channel').setDescription('Channel-Konfiguration (report, modlog)')
+        .addSubcommand((sub) =>
+          sub.setName('set').setDescription('Setzt einen Channel.')
+            .addStringOption((o) => o.setName('type').setDescription('Welcher Channel').setRequired(true).addChoices(...CHANNEL_TYPE_CHOICES))
+            .addChannelOption((o) => o.setName('channel').setDescription('Channel').setRequired(true).addChannelTypes(ChannelType.GuildText))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('unset').setDescription('Entfernt einen Channel.')
+            .addStringOption((o) => o.setName('type').setDescription('Welcher Channel').setRequired(true).addChoices(...CHANNEL_TYPE_CHOICES))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('list').setDescription('Zeigt beide Channels.')
+        )
     ),
 
   requiredTier: 'owner',
@@ -35,16 +67,23 @@ module.exports = {
   async execute(interaction) {
     const group = interaction.options.getSubcommandGroup(false);
     const sub = interaction.options.getSubcommand();
-    if (group !== 'role') {
-      return interaction.reply({
-        content: 'Unbekannter Subcommand.',
-        flags: MessageFlags.Ephemeral,
-      });
+
+    if (group === 'role') {
+      if (sub === 'set')   return handleRoleSet(interaction);
+      if (sub === 'unset') return handleRoleUnset(interaction);
+      if (sub === 'list')  return handleRoleList(interaction);
     }
 
-    if (sub === 'set')   return handleRoleSet(interaction);
-    if (sub === 'unset') return handleRoleUnset(interaction);
-    if (sub === 'list')  return handleRoleList(interaction);
+    if (group === 'channel') {
+      if (sub === 'set')   return handleChannelSet(interaction);
+      if (sub === 'unset') return handleChannelUnset(interaction);
+      if (sub === 'list')  return handleChannelList(interaction);
+    }
+
+    return interaction.reply({
+      content: 'Unbekannter Subcommand.',
+      flags: MessageFlags.Ephemeral,
+    });
   },
 };
 
@@ -208,6 +247,143 @@ async function handleRoleList(interaction) {
   }
 
   embed.setFooter({ text: '🐾 Oreo' });
+
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
+
+async function handleChannelSet(interaction) {
+  const type = interaction.options.getString('type');
+  const channel = interaction.options.getChannel('channel');
+
+  if (channel.type !== ChannelType.GuildText) {
+    return interaction.reply({
+      content: 'Nur Text-Channels werden unterstützt.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // Permission-Check für Bot
+  const botMember = interaction.guild.members.me;
+  const botPerms = channel.permissionsFor(botMember);
+  if (!botPerms?.has(PermissionFlagsBits.SendMessages)) {
+    return interaction.reply({
+      content: `Mir fehlt die Permission 'Nachrichten senden' in <#${channel.id}>. Bitte zuerst beheben.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  if (!botPerms.has(PermissionFlagsBits.EmbedLinks)) {
+    return interaction.reply({
+      content: `Mir fehlt die Permission 'Embed-Links' in <#${channel.id}>. Bitte zuerst beheben.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const column = CHANNEL_COLUMN[type];
+  const label = CHANNEL_LABEL[type];
+  const pool = getPool();
+  let previousId = null;
+
+  try {
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    const [existing] = await pool.execute(
+      `SELECT ${column} AS value FROM guilds WHERE guild_id = ?`,
+      [interaction.guildId],
+    );
+    previousId = existing[0]?.value ? String(existing[0].value) : null;
+
+    await pool.execute(
+      `UPDATE guilds SET ${column} = ? WHERE guild_id = ?`,
+      [channel.id, interaction.guildId],
+    );
+  } catch (err) {
+    console.error('/config channel set DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const message = previousId
+    ? `Channel \`${label}\` von <#${previousId}> auf <#${channel.id}> geändert.`
+    : `Channel \`${label}\` gesetzt auf <#${channel.id}>.`;
+
+  return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+}
+
+async function handleChannelUnset(interaction) {
+  const type = interaction.options.getString('type');
+  const column = CHANNEL_COLUMN[type];
+  const label = CHANNEL_LABEL[type];
+  const pool = getPool();
+  let previousId = null;
+
+  try {
+    const [existing] = await pool.execute(
+      `SELECT ${column} AS value FROM guilds WHERE guild_id = ?`,
+      [interaction.guildId],
+    );
+    previousId = existing[0]?.value ? String(existing[0].value) : null;
+
+    if (previousId === null) {
+      return interaction.reply({
+        content: `Channel \`${label}\` war nicht konfiguriert — nichts zu tun.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    await pool.execute(
+      `UPDATE guilds SET ${column} = NULL WHERE guild_id = ?`,
+      [interaction.guildId],
+    );
+  } catch (err) {
+    console.error('/config channel unset DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `Channel \`${label}\` entfernt (war <#${previousId}>).`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleChannelList(interaction) {
+  let row;
+  try {
+    const [rows] = await getPool().execute(
+      'SELECT mod_log_channel_id, report_channel_id FROM guilds WHERE guild_id = ?',
+      [interaction.guildId],
+    );
+    row = rows[0] ?? null;
+  } catch (err) {
+    console.error('/config channel list DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const reportId = row?.report_channel_id ? String(row.report_channel_id) : null;
+  const modlogDbId = row?.mod_log_channel_id ? String(row.mod_log_channel_id) : null;
+  const modlogEnvId = !modlogDbId && process.env.MODLOG_CHANNEL_ID ? process.env.MODLOG_CHANNEL_ID : null;
+
+  const reportLine = reportId ? `<#${reportId}>` : '(nicht konfiguriert)';
+  let modlogLine;
+  if (modlogDbId) modlogLine = `<#${modlogDbId}>`;
+  else if (modlogEnvId) modlogLine = `<#${modlogEnvId}> *(env-Fallback)*`;
+  else modlogLine = '(nicht konfiguriert)';
+
+  const embed = new EmbedBuilder()
+    .setTitle('🔧 Channel-Konfiguration')
+    .setColor(0x5865f2)
+    .addFields(
+      { name: 'Report-Channel',  value: reportLine, inline: false },
+      { name: 'Mod-Log-Channel', value: modlogLine, inline: false },
+    )
+    .setFooter({ text: '🐾 Oreo' });
 
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
