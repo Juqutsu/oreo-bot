@@ -97,18 +97,18 @@ module.exports = {
           content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#x>` ausführen.',
           flags: MessageFlags.Ephemeral,
         });
-        return;
+      } else {
+        const logChannel = await interaction.client.channels.fetch(channelId);
+        const modEmbed = buildModLogEmbed({
+          action: 'warn',
+          caseNumber,
+          target,
+          mod: moderator,
+          reason: reasonForDisplay,
+          dmFailed,
+        });
+        await logChannel.send({ embeds: [modEmbed] });
       }
-      const logChannel = await interaction.client.channels.fetch(channelId);
-      const modEmbed = buildModLogEmbed({
-        action: 'warn',
-        caseNumber,
-        target,
-        mod: moderator,
-        reason: reasonForDisplay,
-        dmFailed,
-      });
-      await logChannel.send({ embeds: [modEmbed] });
     } catch (err) {
       console.warn('ModLog send failed:', err);
       await interaction.followUp({
