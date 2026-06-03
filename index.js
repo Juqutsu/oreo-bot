@@ -5,6 +5,7 @@ const { ping: pingDb } = require('./src/db');
 const { ensureSchema } = require('./src/schema');
 const perms = require('./src/perms');
 const reportInteractions = require('./src/interactions/report');
+const announcementInteractions = require('./src/interactions/announcement');
 
 const {
   DISCORD_TOKEN, CLIENT_ID, GUILD_ID,
@@ -82,7 +83,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
   // Component path (button / string-select / modal-submit) — new
   if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
     try {
-      const handled = await reportInteractions.dispatch(interaction);
+      const handled = await reportInteractions.dispatch(interaction)
+                   || await announcementInteractions.dispatch(interaction);
       if (!handled) {
         await interaction.reply({ content: 'Unbekannte Interaktion.', flags: MessageFlags.Ephemeral }).catch(() => {});
       }
