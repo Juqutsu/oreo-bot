@@ -152,3 +152,13 @@ ALTER TABLE reports ADD INDEX idx_dup_check (guild_id, reporter_id, reported_use
 -- Idempotent via schema-runner (errno 1061 swallowed in src/schema.js).
 
 ALTER TABLE reports ADD INDEX idx_resolution_case (guild_id, resolution_case_number);
+
+-- ============================================================
+-- Stage 3 Migration: Escalation Source Tag
+-- ============================================================
+-- Erweitert infractions.source um 'escalation', damit Auto-
+-- Eskalations-Cases von manuellen, automod-, und api-Cases
+-- unterscheidbar sind. Additiv — bestehende Rows unverändert.
+
+ALTER TABLE infractions MODIFY COLUMN source
+  ENUM('manual','automod','api','escalation') NOT NULL DEFAULT 'manual';
