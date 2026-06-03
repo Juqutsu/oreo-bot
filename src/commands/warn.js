@@ -2,6 +2,7 @@ const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js'
 const cases = require('../cases');
 const config = require('../config');
 const { buildModLogEmbed } = require('../modlog');
+const escalations = require('../escalations');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -114,6 +115,14 @@ module.exports = {
         content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
         flags: MessageFlags.Ephemeral,
       });
+    }
+
+    // 5. Stage 3: Auto-Eskalation (best-effort)
+    try {
+      const activeWarnCount = await cases.countActiveWarnings(interaction.guildId, target.id);
+      await escalations.applyEscalation({ interaction, target, activeWarnCount });
+    } catch (err) {
+      console.warn('Escalation failed:', err);
     }
   },
 };
