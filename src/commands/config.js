@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
 const { getPool } = require('../db');
+const escalations = require('../escalations');
+const { parseDuration, formatDuration, MAX_TIMEOUT_MS } = require('../duration');
 
 const TIER_CHOICES = [
   { name: 'supporter', value: 'supporter' },
@@ -78,6 +80,26 @@ module.exports = {
             .addBooleanOption((o) => o.setName('value').setDescription('true = aktivieren, false = deaktivieren').setRequired(true))
         )
     )
+    .addSubcommandGroup((group) =>
+      group.setName('escalation').setDescription('Auto-Eskalations-Regeln')
+        .addSubcommand((sub) =>
+          sub.setName('set').setDescription('Setzt oder aktualisiert eine Eskalations-Regel.')
+            .addIntegerOption((o) => o.setName('warn_threshold').setDescription('Aktive Warn-Anzahl bei der die Regel feuert (1-100)').setRequired(true).setMinValue(1).setMaxValue(100))
+            .addStringOption((o) => o.setName('action').setDescription('Action').setRequired(true).addChoices(
+              { name: 'timeout', value: 'timeout' },
+              { name: 'kick', value: 'kick' },
+              { name: 'ban', value: 'ban' },
+            ))
+            .addStringOption((o) => o.setName('duration').setDescription('Dauer (nur bei timeout) — z.B. 30m, 2h, 7d').setRequired(false))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('unset').setDescription('Entfernt eine Eskalations-Regel.')
+            .addIntegerOption((o) => o.setName('warn_threshold').setDescription('Aktive Warn-Anzahl der zu entfernenden Regel (1-100)').setRequired(true).setMinValue(1).setMaxValue(100))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('list').setDescription('Zeigt alle konfigurierten Eskalations-Regeln.')
+        )
+    )
     .addSubcommand((sub) =>
       sub.setName('show').setDescription('Zeigt die komplette Server-Konfiguration.')
     ),
@@ -102,6 +124,12 @@ module.exports = {
 
     if (group === 'feature') {
       if (sub === 'set') return handleFeatureSet(interaction);
+    }
+
+    if (group === 'escalation') {
+      if (sub === 'set')   return handleEscalationSet(interaction);
+      if (sub === 'unset') return handleEscalationUnset(interaction);
+      if (sub === 'list')  return handleEscalationList(interaction);
     }
 
     if (group === null && sub === 'show') {
@@ -506,6 +534,128 @@ async function handleFeatureSet(interaction) {
   return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
 }
 
+const ACTION_ICON = { timeout: '⏱️', kick: '👢', ban: '🔨' };
+const MAX_ESCALATION_RULES_IN_SHOW = 5;
+
+async function handleEscalationSet(interaction) {
+  const threshold = interaction.options.getInteger('warn_threshold');
+  const action = interaction.options.getString('action');
+  const durationInput = interaction.options.getString('duration');
+
+  let durationMinutes = null;
+  let durationDisplay = null;
+  let ignoredDurationWarning = false;
+
+  if (action === 'timeout') {
+    if (!durationInput) {
+      return interaction.reply({
+        content: '❌ Dauer ist für `action:timeout` erforderlich. Beispiel: `30m`, `2h`, `7d`.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    const durationMs = parseDuration(durationInput);
+    if (durationMs == null) {
+      return interaction.reply({
+        content: '❌ Ungültige Dauer-Angabe.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    if (durationMs < 60_000) {
+      return interaction.reply({
+        content: '❌ Min. Timeout-Dauer ist 1 Minute.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    if (durationMs > MAX_TIMEOUT_MS) {
+      return interaction.reply({
+        content: '❌ Maximale Timeout-Dauer ist 28 Tage.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    durationMinutes = Math.floor(durationMs / 60_000);
+    durationDisplay = formatDuration(durationMs);
+  } else if (durationInput) {
+    ignoredDurationWarning = true;
+  }
+
+  try {
+    await escalations.setRule(interaction.guildId, threshold, action, durationMinutes);
+  } catch (err) {
+    console.error('/config escalation set DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const icon = ACTION_ICON[action] ?? '';
+  const actionLabel = durationDisplay ? `${icon} ${capitalize(action)} ${durationDisplay}` : `${icon} ${capitalize(action)}`;
+  let message = `✅ Eskalation gesetzt: bei ${threshold} aktiven Warns → ${actionLabel}`;
+  if (ignoredDurationWarning) {
+    message += `\n⚠️ Dauer wird bei \`${action}\` ignoriert.`;
+  }
+  return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+}
+
+async function handleEscalationUnset(interaction) {
+  const threshold = interaction.options.getInteger('warn_threshold');
+  let affected = 0;
+  try {
+    affected = await escalations.removeRule(interaction.guildId, threshold);
+  } catch (err) {
+    console.error('/config escalation unset DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  const message = affected > 0
+    ? `✅ Eskalation für Schwelle ${threshold} entfernt.`
+    : `Keine Eskalation für Schwelle ${threshold} konfiguriert — nichts zu tun.`;
+  return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+}
+
+async function handleEscalationList(interaction) {
+  let rules = [];
+  try {
+    rules = await escalations.listRules(interaction.guildId);
+  } catch (err) {
+    console.error('/config escalation list DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle('🎯 Eskalations-Regeln')
+    .setColor(0x5865f2)
+    .setFooter({ text: '🐾 Oreo' })
+    .setTimestamp();
+
+  if (rules.length === 0) {
+    embed.setDescription('Keine Eskalations-Regeln konfiguriert. Setze welche mit `/config escalation set`.');
+  } else {
+    embed.setDescription(rules.map(formatRuleLine).join('\n'));
+  }
+
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
+function formatRuleLine(rule) {
+  const icon = ACTION_ICON[rule.action] ?? '';
+  const threshold = Number(rule.warn_threshold);
+  if (rule.action === 'timeout' && rule.duration_minutes) {
+    const durMs = Number(rule.duration_minutes) * 60_000;
+    return `• Schwelle ${threshold} → ${icon} Timeout ${formatDuration(durMs)}`;
+  }
+  return `• Schwelle ${threshold} → ${icon} ${capitalize(rule.action)}`;
+}
+
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 async function handleShow(interaction) {
   let guildRow;
   let roleRows;
@@ -561,12 +711,31 @@ async function handleShow(interaction) {
     .join('\n');
   const rolesValue = roleRows.length > 0 ? roleLines : '(keine Rollen konfiguriert)';
 
+  // Stage 3: Eskalations-Regeln für show
+  let escalationRules = [];
+  try {
+    escalationRules = await escalations.listRules(interaction.guildId);
+  } catch (err) {
+    console.warn('handleShow: listRules failed', err);
+  }
+
+  let escalationValue;
+  if (escalationRules.length === 0) {
+    escalationValue = 'keine Regeln gesetzt';
+  } else {
+    const shown = escalationRules.slice(0, MAX_ESCALATION_RULES_IN_SHOW).map(formatRuleLine);
+    const overflow = escalationRules.length - MAX_ESCALATION_RULES_IN_SHOW;
+    if (overflow > 0) shown.push(`... +${overflow} weitere`);
+    escalationValue = shown.join('\n');
+  }
+
   const embed = new EmbedBuilder()
     .setTitle('🛡️ Server-Konfiguration')
     .setColor(0x5865f2)
     .addFields(
       { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}`, inline: false },
       { name: '⚙️ Features',     value: `Automod: ${automodLine}`,                       inline: false },
+      { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
       { name: '🔐 Rollen-Tiers', value: rolesValue,                                       inline: false },
     )
