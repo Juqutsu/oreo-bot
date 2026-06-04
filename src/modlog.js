@@ -5,6 +5,7 @@ const COLOR_WARN = 0xfaa61a;
 const COLOR_TIMEOUT = 0xfaa61a;
 const COLOR_KICK = 0xed4245;
 const COLOR_BAN = 0xed4245;
+const COLOR_AUTOMOD = 0xf59e0b;
 
 function buildModLogEmbed({
   action,
@@ -84,4 +85,41 @@ function buildModLogEmbed({
   return null;
 }
 
-module.exports = { buildModLogEmbed };
+const FILTER_LABELS = {
+  spam:            'Spam',
+  mention_spam:    'Mass-Mentions',
+  invite_links:    'Invite-Link',
+  keyword_preset:  'KeywordPreset',
+  custom_wordlist: 'Custom-Wordlist',
+};
+
+function buildAutoModHitEmbed({
+  caseNumber,
+  filterKey,
+  userId,
+  username,
+  channelId,
+  content,
+  matched,
+  ruleId,
+}) {
+  const label = FILTER_LABELS[filterKey] ?? filterKey;
+  const userLine    = username ? `<@${userId}> (${username})` : `<@${userId}>`;
+  const channelLine = channelId ? `<#${channelId}>` : 'Unknown channel';
+
+  return new EmbedBuilder()
+    .setTitle(`🛡️ AutoMod Hit · Case #${caseNumber}`)
+    .setColor(COLOR_AUTOMOD)
+    .addFields(
+      { name: 'User',     value: userLine,                   inline: false },
+      { name: 'Filter',   value: label,                      inline: true  },
+      { name: 'Channel',  value: channelLine,                inline: true  },
+      { name: 'Trigger',  value: matched || '—',             inline: false },
+      { name: 'Content',  value: content || '*(empty)*',     inline: false },
+      { name: 'Rule-ID',  value: ruleId ? String(ruleId) : '—', inline: false },
+    )
+    .setFooter({ text: `Case #${caseNumber} · 🐾` })
+    .setTimestamp();
+}
+
+module.exports = { buildModLogEmbed, buildAutoModHitEmbed };
