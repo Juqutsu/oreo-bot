@@ -201,3 +201,11 @@ CREATE TABLE IF NOT EXISTS automod_wordlist (
   UNIQUE KEY uq_word_per_guild (guild_id, word),
   INDEX idx_guild (guild_id)
 );
+
+-- ============================================================
+-- Stage 8 Migration: Message Logging Channel
+-- ============================================================
+-- Adds a new column to store a dedicated channel for deleted
+-- and edited message logs.
+ALTER TABLE guilds ADD COLUMN msg_log_channel_id BIGINT UNSIGNED NULL AFTER mod_log_channel_id;
+

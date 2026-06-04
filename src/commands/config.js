@@ -14,18 +14,21 @@ const TIER_ORDER = ['owner', 'moderator', 'supporter'];
 const CHANNEL_TYPE_CHOICES = [
   { name: 'report', value: 'report' },
   { name: 'modlog', value: 'modlog' },
+  { name: 'msglog', value: 'msglog' },
 ];
 
 // type → DB-Spalte
 const CHANNEL_COLUMN = {
   report: 'report_channel_id',
   modlog: 'mod_log_channel_id',
+  msglog: 'msg_log_channel_id',
 };
 
 // type → User-facing Label
 const CHANNEL_LABEL = {
   report: 'report',
   modlog: 'modlog',
+  msglog: 'msglog',
 };
 
 const FEATURE_CHOICES = [
@@ -470,7 +473,7 @@ async function handleChannelList(interaction) {
   let row;
   try {
     const [rows] = await getPool().execute(
-      'SELECT mod_log_channel_id, report_channel_id FROM guilds WHERE guild_id = ?',
+      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id FROM guilds WHERE guild_id = ?',
       [interaction.guildId],
     );
     row = rows[0] ?? null;
@@ -485,12 +488,14 @@ async function handleChannelList(interaction) {
   const reportId = row?.report_channel_id ? String(row.report_channel_id) : null;
   const modlogDbId = row?.mod_log_channel_id ? String(row.mod_log_channel_id) : null;
   const modlogEnvId = !modlogDbId && process.env.MODLOG_CHANNEL_ID ? process.env.MODLOG_CHANNEL_ID : null;
+  const msglogId = row?.msg_log_channel_id ? String(row.msg_log_channel_id) : null;
 
   const reportLine = reportId ? `<#${reportId}>` : '(nicht konfiguriert)';
   let modlogLine;
   if (modlogDbId) modlogLine = `<#${modlogDbId}>`;
   else if (modlogEnvId) modlogLine = `<#${modlogEnvId}> *(env-Fallback)*`;
   else modlogLine = '(nicht konfiguriert)';
+  const msglogLine = msglogId ? `<#${msglogId}>` : '(nicht konfiguriert)';
 
   const embed = new EmbedBuilder()
     .setTitle('🔧 Channel-Konfiguration')
@@ -498,6 +503,7 @@ async function handleChannelList(interaction) {
     .addFields(
       { name: 'Report-Channel',  value: reportLine, inline: false },
       { name: 'Mod-Log-Channel', value: modlogLine, inline: false },
+      { name: 'Message-Log-Channel', value: msglogLine, inline: false },
     )
     .setFooter({ text: '🐾 Oreo' });
 
@@ -662,7 +668,7 @@ async function handleShow(interaction) {
   try {
     const pool = getPool();
     const [gRows] = await pool.execute(
-      'SELECT mod_log_channel_id, report_channel_id, automod_enabled, next_case_number FROM guilds WHERE guild_id = ?',
+      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, automod_enabled, next_case_number FROM guilds WHERE guild_id = ?',
       [interaction.guildId],
     );
     guildRow = gRows[0] ?? null;
@@ -683,12 +689,14 @@ async function handleShow(interaction) {
   const reportId = guildRow?.report_channel_id ? String(guildRow.report_channel_id) : null;
   const modlogDbId = guildRow?.mod_log_channel_id ? String(guildRow.mod_log_channel_id) : null;
   const modlogEnvId = !modlogDbId && process.env.MODLOG_CHANNEL_ID ? process.env.MODLOG_CHANNEL_ID : null;
+  const msglogId = guildRow?.msg_log_channel_id ? String(guildRow.msg_log_channel_id) : null;
 
   const reportLine = reportId ? `<#${reportId}>` : '(nicht konfiguriert)';
   let modlogLine;
   if (modlogDbId) modlogLine = `<#${modlogDbId}>`;
   else if (modlogEnvId) modlogLine = `<#${modlogEnvId}> *(env-Fallback)*`;
   else modlogLine = '(nicht konfiguriert)';
+  const msglogLine = msglogId ? `<#${msglogId}>` : '(nicht konfiguriert)';
 
   // Features
   const automodOn = Boolean(guildRow?.automod_enabled);
@@ -733,7 +741,7 @@ async function handleShow(interaction) {
     .setTitle('🛡️ Server-Konfiguration')
     .setColor(0x5865f2)
     .addFields(
-      { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}`, inline: false },
+      { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}`, inline: false },
       { name: '⚙️ Features',     value: `Automod: ${automodLine}`,                       inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },

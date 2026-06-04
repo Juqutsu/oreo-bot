@@ -1,4 +1,4 @@
-const { Client, Collection, Events, GatewayIntentBits, MessageFlags } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits, MessageFlags, Partials } = require('discord.js');
 const { loadCommands } = require('./src/loadCommands');
 const { loadEvents }   = require('./src/loadEvents');
 const { deployCommands } = require('./src/deployCommands');
@@ -29,7 +29,10 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.AutoModerationConfiguration,
     GatewayIntentBits.AutoModerationExecution,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
   ],
+  partials: [Partials.Message],
 });
 client.commands = new Collection(loadCommands());
 const _evtCount = loadEvents(client);

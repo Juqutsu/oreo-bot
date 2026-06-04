@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, automod_enabled FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, automod_enabled FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -46,8 +46,19 @@ async function isAutomodEnabled(guildId) {
   return Boolean(row?.automod_enabled);
 }
 
+/**
+ * Liefert die msg-log-channel-ID. Kein env-Fallback.
+ * @param {string} guildId
+ * @returns {Promise<string|null>}
+ */
+async function getMsgLogChannelId(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.msg_log_channel_id ? String(row.msg_log_channel_id) : null;
+}
+
 module.exports = {
   getModLogChannelId,
   getReportChannelId,
+  getMsgLogChannelId,
   isAutomodEnabled,
 };
