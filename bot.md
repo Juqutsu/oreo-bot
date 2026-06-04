@@ -135,8 +135,8 @@ Ideen für Oreo v2 – wenn die Basis steht:
 
 - [ ] **Raid-Schutz** – Lockdown bei Join-Wellen, Alarm ans Team
 - [ ] **Anti-Phishing** – bekannte Scam-Links automatisch löschen
-- [ ] **Verifizierung** – Button/Captcha für neue User vor Schreibrechten
-- [ ] **Account-Age-Check** – brandneue Accounts beim Join flaggen
+- [x] **Verifizierung** – Button/Captcha für neue User vor Schreibrechten
+- [x] **Account-Age-Check** – brandneue Accounts beim Join flaggen
 - [ ] **Verdächtige-Aktivität-Alerts** – Massen-DMs, schnelle Rollenwechsel
 - [ ] **Statistiken** – Reports/Woche, häufigste Gründe, aktivste Mods
 
