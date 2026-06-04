@@ -6,6 +6,7 @@ const COLOR_TIMEOUT = 0xfaa61a;
 const COLOR_KICK = 0xed4245;
 const COLOR_BAN = 0xed4245;
 const COLOR_AUTOMOD = 0xf59e0b;
+const COLOR_REVERT = 0x57f287;
 
 function buildModLogEmbed({
   action,
@@ -72,6 +73,34 @@ function buildModLogEmbed({
     return new EmbedBuilder()
       .setTitle('🔨 User gebannt')
       .setColor(COLOR_BAN)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: '👤 User', value: `<@${target.id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
+        { name: '📝 Grund', value: reasonValue, inline: false },
+      )
+      .setFooter({ text: footer })
+      .setTimestamp();
+  }
+
+  if (action === 'unban') {
+    return new EmbedBuilder()
+      .setTitle('🔓 User entbannt')
+      .setColor(COLOR_REVERT)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: '👤 User', value: `<@${target.id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
+        { name: '📝 Grund', value: reasonValue, inline: false },
+      )
+      .setFooter({ text: footer })
+      .setTimestamp();
+  }
+
+  if (action === 'untimeout') {
+    return new EmbedBuilder()
+      .setTitle('🔊 Timeout aufgehoben')
+      .setColor(COLOR_REVERT)
       .setThumbnail(target.displayAvatarURL({ size: 256 }))
       .addFields(
         { name: '👤 User', value: `<@${target.id}>`, inline: false },
