@@ -218,6 +218,17 @@ async function listUserInfractions(guildId, userId, { includeInactive = true, li
   return rows;
 }
 
+/**
+ * Deaktiviert alle aktiven Infractions eines bestimmten Typs für einen User.
+ * @returns {Promise<void>}
+ */
+async function deactivateActiveInfractions(guildId, userId, type) {
+  await getPool().execute(
+    'UPDATE infractions SET active = 0 WHERE guild_id = ? AND user_id = ? AND type = ? AND active = 1',
+    [guildId, userId, type]
+  );
+}
+
 module.exports = {
   createCase,
   getCaseByNumber,
@@ -225,6 +236,7 @@ module.exports = {
   listUserInfractions,
   countActiveWarnings,
   deactivate,
+  deactivateActiveInfractions,
   removeWarn,
   editReason,
 };

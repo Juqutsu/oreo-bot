@@ -49,6 +49,12 @@ module.exports = {
       });
     }
 
+    try {
+      await cases.deactivateActiveInfractions(interaction.guildId, target.id, 'timeout');
+    } catch (err) {
+      console.warn('deactivateActiveInfractions failed:', err);
+    }
+
     let caseNumber;
     try {
       const result = await cases.createCase({

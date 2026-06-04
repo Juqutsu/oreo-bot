@@ -2,19 +2,36 @@ const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
 const config = require('../config');
 const { buildModLogEmbed } = require('../modlog');
+const { parseDuration } = require('../duration');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ban')
     .setDescription('Bannt einen Nutzer vom Server.')
     .addUserOption((option) => option.setName('target').setDescription('Wer soll gebannt werden?').setRequired(true))
+    .addStringOption((option) => option.setName('duration').setDescription('Optional: Dauer des Bans (z.B. 30m, 2h, 7d)').setRequired(false))
     .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setRequired(false)),
 
   requiredTier: 'owner',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');
+    const durationInput = interaction.options.getString('duration');
     const reason = interaction.options.getString('reason') ?? 'Kein Grund angegeben';
+
+    let durationMs = null;
+    let expiresAt = null;
+
+    if (durationInput) {
+      durationMs = parseDuration(durationInput);
+      if (!durationMs) {
+        return interaction.reply({
+          content: '❌ Ungültige Dauer. Nutze z.B. `30s`, `10m`, `2h`, `7d`.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      expiresAt = new Date(Date.now() + durationMs);
+    }
 
     const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
     const moderator = interaction.member;
@@ -65,6 +82,8 @@ module.exports = {
         moderatorId: moderator.id,
         type: 'ban',
         reason: interaction.options.getString('reason'),
+        durationMs: durationMs ? BigInt(durationMs) : null,
+        expiresAt,
       });
       caseNumber = result.caseNumber;
     } catch (err) {
@@ -72,8 +91,12 @@ module.exports = {
       caseNumber = null;
     }
 
+    const banMessage = durationMs 
+      ? `**${target.username}** wurde temporär gebannt. (Case #${caseNumber ?? 'nicht gespeichert'})`
+      : `**${target.username}** wurde permanent gebannt. (Case #${caseNumber ?? 'nicht gespeichert'})`;
+
     await interaction.reply({
-      content: `**${target.username}** wurde gebannt. (Case #${caseNumber ?? 'nicht gespeichert'})`,
+      content: banMessage,
       flags: MessageFlags.Ephemeral,
     });
 
@@ -93,6 +116,7 @@ module.exports = {
         target,
         mod: moderator,
         reason,
+        durationMs,
       });
       await logChannel.send({ embeds: [modEmbed] });
     } catch (e) {

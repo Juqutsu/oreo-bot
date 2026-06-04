@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS infractions (
   case_number   INT UNSIGNED NOT NULL,
   user_id       BIGINT UNSIGNED NOT NULL,
   moderator_id  BIGINT UNSIGNED NOT NULL,
-  type          ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited','automod_hit') NOT NULL,
-  source        ENUM('manual','automod','api') NOT NULL DEFAULT 'manual',
+  type          ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited','automod_hit','mute','unmute','softban') NOT NULL,
+  source        ENUM('manual','automod','api','escalation','system') NOT NULL DEFAULT 'manual',
   reason        VARCHAR(512) NULL,
   duration_ms   BIGINT UNSIGNED NULL,
   expires_at    DATETIME NULL,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS automod_exemptions (
 -- Neue ENUM-Werte für Meta-Cases. MODIFY COLUMN ist idempotent —
 -- MySQL setzt die Spalten-Definition auf den Soll-Zustand.
 ALTER TABLE infractions MODIFY COLUMN type
-  ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited','automod_hit') NOT NULL;
+  ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited','automod_hit','mute','unmute','softban') NOT NULL;
 
 -- parent_case_number: Verbindung von Meta-Cases zum Original-Case.
 -- ADD COLUMN ohne IF NOT EXISTS (MySQL unterstützt IF NOT EXISTS nicht);
@@ -161,7 +161,7 @@ ALTER TABLE reports ADD INDEX idx_resolution_case (guild_id, resolution_case_num
 -- unterscheidbar sind. Additiv — bestehende Rows unverändert.
 
 ALTER TABLE infractions MODIFY COLUMN source
-  ENUM('manual','automod','api','escalation') NOT NULL DEFAULT 'manual';
+  ENUM('manual','automod','api','escalation','system') NOT NULL DEFAULT 'manual';
 
 -- ============================================================
 -- Stage 5 Migration: AutoMod Tables + automod_hit Case Type
@@ -173,7 +173,7 @@ ALTER TABLE infractions MODIFY COLUMN source
 -- 1. Extend the case type enum.
 ALTER TABLE infractions MODIFY COLUMN type
   ENUM('warn','timeout','kick','ban','unban','untimeout',
-       'warn_removed','reason_edited','automod_hit') NOT NULL;
+       'warn_removed','reason_edited','automod_hit','mute','unmute','softban') NOT NULL;
 
 -- 2. Per-filter state. One row per (guild × filter).
 CREATE TABLE IF NOT EXISTS automod_rules (
@@ -214,5 +214,18 @@ ALTER TABLE guilds ADD COLUMN msg_log_channel_id BIGINT UNSIGNED NULL AFTER mod_
 -- ============================================================
 -- Adds a column to configure the minimum account age for joins
 ALTER TABLE guilds ADD COLUMN min_account_age_days INT UNSIGNED NOT NULL DEFAULT 0;
+
+-- ============================================================
+-- Stage 10 Migration: Temp-Bans, Soft-Bans, Warn Decay, Muted Role
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN warn_decay_days INT UNSIGNED NOT NULL DEFAULT 0;
+ALTER TABLE guilds ADD COLUMN muted_role_id BIGINT UNSIGNED NULL;
+
+ALTER TABLE infractions MODIFY COLUMN type 
+  ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited','automod_hit','mute','unmute','softban') NOT NULL;
+
+ALTER TABLE infractions MODIFY COLUMN source
+  ENUM('manual','automod','api','escalation','system') NOT NULL DEFAULT 'manual';
+
 
 

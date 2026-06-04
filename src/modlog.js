@@ -70,7 +70,7 @@ function buildModLogEmbed({
   }
 
   if (action === 'ban') {
-    return new EmbedBuilder()
+    const embed = new EmbedBuilder()
       .setTitle('🔨 User gebannt')
       .setColor(COLOR_BAN)
       .setThumbnail(target.displayAvatarURL({ size: 256 }))
@@ -78,9 +78,15 @@ function buildModLogEmbed({
         { name: '👤 User', value: `<@${target.id}>`, inline: false },
         { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
         { name: '📝 Grund', value: reasonValue, inline: false },
-      )
-      .setFooter({ text: footer })
-      .setTimestamp();
+      );
+    if (durationMs) {
+      const expSec = Math.floor((Date.now() + durationMs) / 1000);
+      embed.addFields(
+        { name: '⏱️ Dauer', value: formatDuration(durationMs), inline: true },
+        { name: '📅 Läuft ab', value: `<t:${expSec}:f>`, inline: true }
+      );
+    }
+    return embed.setFooter({ text: footer }).setTimestamp();
   }
 
   if (action === 'unban') {
@@ -101,6 +107,54 @@ function buildModLogEmbed({
     return new EmbedBuilder()
       .setTitle('🔊 Timeout aufgehoben')
       .setColor(COLOR_REVERT)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: '👤 User', value: `<@${target.id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
+        { name: '📝 Grund', value: reasonValue, inline: false },
+      )
+      .setFooter({ text: footer })
+      .setTimestamp();
+  }
+
+  if (action === 'mute') {
+    const embed = new EmbedBuilder()
+      .setTitle('🔇 User stummgeschaltet')
+      .setColor(0x9b59b6)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: '👤 User', value: `<@${target.id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
+        { name: '📝 Grund', value: reasonValue, inline: false },
+      );
+    if (durationMs) {
+      const expSec = Math.floor((Date.now() + durationMs) / 1000);
+      embed.addFields(
+        { name: '⏱️ Dauer', value: formatDuration(durationMs), inline: true },
+        { name: '📅 Läuft ab', value: `<t:${expSec}:f>`, inline: true }
+      );
+    }
+    return embed.setFooter({ text: footer }).setTimestamp();
+  }
+
+  if (action === 'unmute') {
+    return new EmbedBuilder()
+      .setTitle('🔊 Stummschaltung aufgehoben')
+      .setColor(COLOR_REVERT)
+      .setThumbnail(target.displayAvatarURL({ size: 256 }))
+      .addFields(
+        { name: '👤 User', value: `<@${target.id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${mod.id}>`, inline: false },
+        { name: '📝 Grund', value: reasonValue, inline: false },
+      )
+      .setFooter({ text: footer })
+      .setTimestamp();
+  }
+
+  if (action === 'softban') {
+    return new EmbedBuilder()
+      .setTitle('ℹ️ User soft-gebannt')
+      .setColor(0xe67e22)
       .setThumbnail(target.displayAvatarURL({ size: 256 }))
       .addFields(
         { name: '👤 User', value: `<@${target.id}>`, inline: false },

@@ -41,6 +41,17 @@ async function execute(entry, guild) {
   // If this audit log entry is not one of our tracked moderation actions, ignore it.
   if (!type) return;
 
+  // Deactivate old active infractions of target type before writing new case
+  try {
+    if (type === 'unban' || type === 'ban') {
+      await cases.deactivateActiveInfractions(guild.id, entry.targetId, 'ban');
+    } else if (type === 'untimeout' || type === 'timeout') {
+      await cases.deactivateActiveInfractions(guild.id, entry.targetId, 'timeout');
+    }
+  } catch (err) {
+    console.warn('[audit-mirror] failed to deactivate overriding infractions:', err);
+  }
+
   // 2. Persist case (fail-soft).
   let caseNumber = null;
   try {

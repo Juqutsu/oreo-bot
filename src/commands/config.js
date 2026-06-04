@@ -109,6 +109,10 @@ module.exports = {
           sub.setName('set-age').setDescription('Setzt die Mindestalter-Prüfung für beigetretene Accounts.')
             .addIntegerOption((o) => o.setName('days').setDescription('Mindestalter in Tagen (0 = deaktiviert)').setRequired(true).setMinValue(0).setMaxValue(30))
         )
+        .addSubcommand((sub) =>
+          sub.setName('set-warn-decay').setDescription('Setzt die Zeit in Tagen, nach der Verwarnungen verfallen.')
+            .addIntegerOption((o) => o.setName('days').setDescription('Tage bis zum Verfall (0 = deaktiviert)').setRequired(true).setMinValue(0).setMaxValue(365))
+        )
     )
     .addSubcommand((sub) =>
       sub.setName('show').setDescription('Zeigt die komplette Server-Konfiguration.')
@@ -144,6 +148,7 @@ module.exports = {
 
     if (group === 'security') {
       if (sub === 'set-age') return handleSecuritySetAge(interaction);
+      if (sub === 'set-warn-decay') return handleSecuritySetWarnDecay(interaction);
     }
 
     if (group === null && sub === 'show') {
@@ -696,13 +701,36 @@ async function handleSecuritySetAge(interaction) {
   return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
 }
 
+async function handleSecuritySetWarnDecay(interaction) {
+  const days = interaction.options.getInteger('days');
+  const pool = getPool();
+  try {
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await pool.execute(
+      'UPDATE guilds SET warn_decay_days = ? WHERE guild_id = ?',
+      [days, interaction.guildId]
+    );
+  } catch (err) {
+    console.error('/config security set-warn-decay DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const message = days > 0
+    ? `✅ Verwarnungs-Verfall auf **${days} Tage** gesetzt. Ältere Verwarnungen verfallen automatisch.`
+    : '✅ Verwarnungs-Verfall deaktiviert (Verwarnungen verfallen nie).';
+  return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+}
+
 async function handleShow(interaction) {
   let guildRow;
   let roleRows;
   try {
     const pool = getPool();
     const [gRows] = await pool.execute(
-      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, automod_enabled, next_case_number FROM guilds WHERE guild_id = ?',
+      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, next_case_number FROM guilds WHERE guild_id = ?',
       [interaction.guildId],
     );
     guildRow = gRows[0] ?? null;
@@ -737,6 +765,10 @@ async function handleShow(interaction) {
   const automodLine = automodOn ? '✅ aktiv' : '❌ deaktiviert';
   const minAge = guildRow?.min_account_age_days ? Number(guildRow.min_account_age_days) : 0;
   const minAgeLine = minAge > 0 ? `⚠️ Flag unter ${minAge} Tagen` : '❌ inaktiv';
+  const warnDecay = guildRow?.warn_decay_days ? Number(guildRow.warn_decay_days) : 0;
+  const warnDecayLine = warnDecay > 0 ? `${warnDecay} Tage` : '❌ inaktiv';
+  const mutedRoleId = guildRow?.muted_role_id ? String(guildRow.muted_role_id) : null;
+  const mutedRoleLine = mutedRoleId ? `<@&${mutedRoleId}>` : '(nicht konfiguriert)';
 
   // Stats — next_case_number stores the LAST assigned (atomic LAST_INSERT_ID pattern in cases.js).
   // Next-to-assign = stored + 1. If no row exists yet, the first case will be #1.
@@ -778,7 +810,7 @@ async function handleShow(interaction) {
     .setColor(0x5865f2)
     .addFields(
       { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}`, inline: false },
-      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}`,   inline: false },
+      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}`,   inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
       { name: '🔐 Rollen-Tiers', value: rolesValue,                                       inline: false },

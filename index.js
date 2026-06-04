@@ -39,8 +39,11 @@ client.commands = new Collection(loadCommands());
 const _evtCount = loadEvents(client);
 console.log(`[startup] Registered ${_evtCount} event handler(s)`);
 
+const { startBackgroundTasks } = require('./src/background');
+
 client.once(Events.ClientReady, (c) => {
   console.log(`Logged in as ${c.user.tag} (${client.commands.size} command(s) loaded)`);
+  startBackgroundTasks(client);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

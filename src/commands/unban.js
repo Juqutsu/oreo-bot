@@ -57,6 +57,12 @@ module.exports = {
       });
     }
 
+    try {
+      await cases.deactivateActiveInfractions(interaction.guildId, targetId, 'ban');
+    } catch (err) {
+      console.warn('deactivateActiveInfractions failed:', err);
+    }
+
     let caseNumber;
     try {
       const result = await cases.createCase({

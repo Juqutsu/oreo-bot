@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, automod_enabled FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -66,10 +66,46 @@ async function getMinAccountAgeDays(guildId) {
   return row?.min_account_age_days ? Number(row.min_account_age_days) : 0;
 }
 
+/**
+ * Liefert die Dauer in Tagen, nach denen eine Verwarnung verfällt. Default: 0 (deaktiviert).
+ * @param {string} guildId
+ * @returns {Promise<number>}
+ */
+async function getWarnDecayDays(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.warn_decay_days ? Number(row.warn_decay_days) : 0;
+}
+
+/**
+ * Liefert die ID der Mute-Rolle.
+ * @param {string} guildId
+ * @returns {Promise<string|null>}
+ */
+async function getMutedRoleId(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.muted_role_id ? String(row.muted_role_id) : null;
+}
+
+/**
+ * Speichert die ID der Mute-Rolle in der Konfiguration.
+ * @param {string} guildId
+ * @param {string} roleId
+ * @returns {Promise<void>}
+ */
+async function setMutedRoleId(guildId, roleId) {
+  await getPool().execute(
+    'UPDATE guilds SET muted_role_id = ? WHERE guild_id = ?',
+    [roleId, guildId]
+  );
+}
+
 module.exports = {
   getModLogChannelId,
   getReportChannelId,
   getMsgLogChannelId,
   getMinAccountAgeDays,
+  getWarnDecayDays,
+  getMutedRoleId,
+  setMutedRoleId,
   isAutomodEnabled,
 };
