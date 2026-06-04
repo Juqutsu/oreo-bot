@@ -149,15 +149,16 @@ async function ephemeralReply(interaction, content) {
 // ---- Subcommand: status ----
 
 async function doStatus(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const rows = await automod.getAllRuleStates(interaction.guildId);
   const byKey = new Map(rows.map((r) => [r.filter_key, r]));
   const lines = ['```',
-    'Filter            Status   Discord-Rule-ID       Extra',
-    '────────────────────────────────────────────────────────'];
+    'Filter                   Status   Discord-Rule-ID       Extra',
+    '─────────────────────────────────────────────────────────────'];
 
   for (const key of FILTER_KEYS) {
     const r = byKey.get(key);
-    const label   = (TRIGGER_NAMES[key] ?? key).padEnd(17);
+    const label   = (TRIGGER_NAMES[key] ?? key).padEnd(24);
     const status  = r?.enabled ? '✅ on '  : '❌ off';
     const ruleId  = (r?.discord_rule_id ? String(r.discord_rule_id) : '—').padEnd(20);
     let extra = '—';
@@ -178,7 +179,7 @@ async function doStatus(interaction) {
     lines.push(`${label} ${status}   ${ruleId} ${extra}`);
   }
   lines.push('```');
-  await interaction.reply({ content: lines.join('\n'), flags: MessageFlags.Ephemeral });
+  await interaction.editReply({ content: lines.join('\n') });
 }
 
 // ---- Subcommand: enable ----
@@ -218,7 +219,11 @@ async function doEnable(interaction) {
     await automod.upsertRuleState(interaction.guildId, filterKey, { discord_rule_id: null, enabled: 0 });
   }
 
-  const rule = await automod.createDiscordRule(interaction.guild, filterKey, interaction.user.tag);
+  const rule = await automod.createDiscordRule(
+    interaction.guild,
+    filterKey,
+    interaction.user.globalName ?? interaction.user.username,
+  );
   await automod.upsertRuleState(interaction.guildId, filterKey, {
     discord_rule_id: rule.id,
     enabled: 1,
@@ -237,7 +242,8 @@ async function doDisable(interaction) {
     return interaction.editReply(`ℹ️ \`${filterKey}\` ist bereits disabled.`);
   }
   if (state.discord_rule_id) {
-    await automod.deleteDiscordRule(interaction.guild, state.discord_rule_id, `Oreo /automod disable by ${interaction.user.tag}`);
+    const modTag = interaction.user.globalName ?? interaction.user.username;
+    await automod.deleteDiscordRule(interaction.guild, state.discord_rule_id, `Oreo /automod disable by ${modTag}`);
   }
   await automod.upsertRuleState(interaction.guildId, filterKey, { discord_rule_id: null, enabled: 0 });
   await interaction.editReply(`✅ \`${filterKey}\` disabled.`);
@@ -334,6 +340,7 @@ async function doWordlistRemove(interaction) {
     });
     if (!patched) {
       await automod.upsertRuleState(interaction.guildId, 'custom_wordlist', { discord_rule_id: null, enabled: 0 });
+      return interaction.editReply(`✅ "${removed}" entfernt, aber Discord-Rule existierte nicht mehr — state zurückgesetzt.`);
     }
   }
   await interaction.editReply(`✅ "${removed}" entfernt.`);
