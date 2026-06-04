@@ -138,7 +138,7 @@ Ideen für Oreo v2 – wenn die Basis steht:
 - [x] **Verifizierung** – Button/Captcha für neue User vor Schreibrechten
 - [x] **Account-Age-Check** – brandneue Accounts beim Join flaggen
 - [ ] **Verdächtige-Aktivität-Alerts** – Massen-DMs, schnelle Rollenwechsel
-- [ ] **Statistiken** – Reports/Woche, häufigste Gründe, aktivste Mods
+- [x] **Statistiken** – Reports/Woche, häufigste Gründe, aktivste Mods
 
 ---
 
