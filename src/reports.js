@@ -88,7 +88,7 @@ function touchCooldown(userId) {
 
 /**
  * Sucht den Report, dessen Resolve-Aktion in einen bestimmten Case geflossen ist.
- * Genutzt von /case <N> für die Reverse-Lookup-Anzeige (Stage 2d Spec §4.1).
+ * Genutzt von /case <N> für die Reverse-Lookup-Anzeige.
  *
  * @param {string} guildId
  * @param {number} caseNumber

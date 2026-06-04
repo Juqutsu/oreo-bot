@@ -17,16 +17,13 @@ const EMOJIS = [
 ];
 
 function generatePuzzle(userId, attempt) {
-  // Select target
   const targetIndex = Math.floor(Math.random() * EMOJIS.length);
   const target = EMOJIS[targetIndex];
 
-  // Select 4 decoys
   const decoys = EMOJIS.filter((_, idx) => idx !== targetIndex)
     .sort(() => 0.5 - Math.random())
     .slice(0, 4);
 
-  // Combine and shuffle
   const options = [
     { ...target, isCorrect: true },
     ...decoys.map((d) => ({ ...d, isCorrect: false })),
@@ -34,7 +31,7 @@ function generatePuzzle(userId, attempt) {
 
   const embed = new EmbedBuilder()
     .setTitle(`🔐 Captcha-Verifizierung (Versuch ${attempt}/3)`)
-    .setColor(0xf1c40f) // Yellow
+    .setColor(0xf1c40f)
     .setDescription(`Bitte klicke auf das Emoji, welches folgendes Symbol darstellt:\n\n👉 **${target.name}** 👈`)
     .setFooter({ text: '🐾 Oreo • Captcha' })
     .setTimestamp();
@@ -62,13 +59,9 @@ async function dispatch(interaction) {
   if (!customId.startsWith('captcha_')) return false;
 
   const parts = customId.split('_');
-  // captcha_start_[userId]
-  // captcha_correct_[userId]_[attempt]_[emoji]
-  // captcha_wrong_[userId]_[attempt]_[emoji]
   const action = parts[1];
   const targetUserId = parts[2];
 
-  // Security: only the targeted member can interact
   if (interaction.user.id !== targetUserId) {
     await interaction.reply({
       content: '❌ Diese Verifizierung ist nicht für dich gedacht.',
@@ -101,10 +94,9 @@ async function dispatch(interaction) {
   if (action === 'correct') {
     await interaction.deferUpdate();
 
-    // 1. Assign Role
     const verifiedRoleId = await config.getVerifiedRoleId(guild.id);
     let assignedRoleText = '';
-    
+
     if (verifiedRoleId) {
       const role = guild.roles.cache.get(verifiedRoleId) || await guild.roles.fetch(verifiedRoleId).catch(() => null);
       if (role) {
@@ -114,7 +106,6 @@ async function dispatch(interaction) {
         assignedRoleText = ` (Rolle <@&${role.id}> zugewiesen)`;
       }
     } else {
-      // Auto-create/find Member role
       let role = guild.roles.cache.find((r) => r.name === 'Member');
       if (!role) {
         role = await guild.roles.create({
@@ -132,7 +123,6 @@ async function dispatch(interaction) {
       }
     }
 
-    // 2. Modlog
     try {
       const channelId = await config.getModLogChannelId(guild.id);
       if (channelId) {
@@ -151,7 +141,6 @@ async function dispatch(interaction) {
       console.error('[captcha] failed to send modlog entry:', err);
     }
 
-    // 3. Delete channel
     setTimeout(async () => {
       await interaction.channel.delete('Oreo: Verifizierung abgeschlossen.').catch(() => null);
     }, 1500);
@@ -161,7 +150,6 @@ async function dispatch(interaction) {
 
   if (action === 'wrong') {
     if (attempt < 3) {
-      // Show next puzzle
       const puzzle = generatePuzzle(targetUserId, attempt + 1);
       await interaction.reply({
         content: '❌ Falsches Emoji! Versuche es noch einmal.',
@@ -170,12 +158,10 @@ async function dispatch(interaction) {
       });
     } else {
       await interaction.deferUpdate();
-      // Kick member
       await member.kick('Oreo: Captcha-Verifizierung fehlgeschlagen (3 Fehlversuche)').catch((err) => {
         console.error(`[captcha] Failed to kick user ${targetUserId}:`, err);
       });
 
-      // Modlog
       try {
         const channelId = await config.getModLogChannelId(guild.id);
         if (channelId) {
@@ -194,9 +180,8 @@ async function dispatch(interaction) {
         console.error('[captcha] failed to send modlog entry:', err);
       }
 
-      // Delete channel
       setTimeout(async () => {
-        await interaction.channel.delete('Oreo: Verifizierung fehlgeschlagen.').catch(() => null);
+        await interaction.channel.delete('Oreo: Verifizierung failed.').catch(() => null);
       }, 1500);
     }
     return true;

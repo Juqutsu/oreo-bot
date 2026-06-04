@@ -34,7 +34,6 @@ async function getOrCreateMutedRole(guild) {
     if (role) {
       await config.setMutedRoleId(guildId, role.id);
 
-      // Edit channel overwrites (best-effort)
       const channels = await guild.channels.fetch().catch(() => new Map());
       for (const [_, channel] of channels) {
         if (channel.isTextBased() || channel.isVoiceBased()) {
@@ -52,10 +51,8 @@ async function getOrCreateMutedRole(guild) {
 }
 
 async function execute(message) {
-  // Ignore bots and DMs
   if (message.author.bot || !message.guild) return;
 
-  // Exempt administrators and moderators with ManageMessages permission
   if (message.member?.permissions.has(PermissionFlagsBits.ManageMessages) || message.member?.permissions.has(PermissionFlagsBits.Administrator)) {
     return;
   }
@@ -81,16 +78,13 @@ async function execute(message) {
     }
 
     if (matchedWord) {
-      // 1. Delete message
       await message.delete().catch(() => null);
 
-      // 2. Ephemeral warning message (deleted after 5 seconds)
       const warningMsg = await message.channel.send(`❌ <@${message.author.id}>, deine Nachricht wurde gelöscht, da sie blockierte Wörter enthält.`).catch(() => null);
       if (warningMsg) {
         setTimeout(() => warningMsg.delete().catch(() => null), 5000);
       }
 
-      // 3. Process action
       const action = await config.getToxicityAction(guildId);
       let caseNumber = null;
       let reason = `Toxizitäts-Filter: Blockiertes Wort "${matchedWord}"`;
@@ -109,10 +103,8 @@ async function execute(message) {
         });
         caseNumber = result?.caseNumber;
 
-        // Apply escalation rules
         try {
           const activeWarnCount = await cases.countActiveWarnings(guildId, message.author.id);
-          // Construct a mock interaction so applyEscalation doesn't crash on replies
           let followUpMsg = null;
           const mockInteraction = {
             guildId,
@@ -142,10 +134,9 @@ async function execute(message) {
           });
         }
 
-        // Deactivate previous active mutes
         await cases.deactivateActiveInfractions(guildId, message.author.id, 'mute').catch(() => null);
 
-        const durationMs = 10 * 60 * 1000; // 10 minutes default temp-mute
+        const durationMs = 10 * 60 * 1000;
         const expiresAt = new Date(Date.now() + durationMs);
 
         const result = await cases.createCase({
@@ -164,7 +155,6 @@ async function execute(message) {
         caseNumber = result?.caseNumber;
 
       } else {
-        // action === 'delete'
         const result = await cases.createCase({
           guildId,
           userId: message.author.id,
@@ -179,7 +169,6 @@ async function execute(message) {
         caseNumber = result?.caseNumber;
       }
 
-      // 4. Log to Modlog
       try {
         const modLogChannelId = await config.getModLogChannelId(guildId);
         if (modLogChannelId) {

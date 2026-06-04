@@ -30,12 +30,10 @@ module.exports = {
   async execute(interaction) {
     const targetChannel = interaction.options.getChannel('channel') ?? interaction.channel;
 
-    // Channel-type guard
     if (!targetChannel?.isTextBased() || targetChannel.isDMBased()) {
       return interaction.reply({ content: '❌ Nur Text-Channels.', flags: MessageFlags.Ephemeral });
     }
 
-    // Bot-permission guards in target channel
     const botPerms = targetChannel.permissionsFor(interaction.guild.members.me);
     if (!botPerms?.has(PermissionFlagsBits.SendMessages)) {
       return interaction.reply({
@@ -50,7 +48,6 @@ module.exports = {
       });
     }
 
-    // Ping role: optional. Wenn @everyone gewählt → extra MentionEveryone check.
     const pingRole = interaction.options.getRole('ping');
     const pingRoleId = pingRole?.id ?? 'none';
 
@@ -63,7 +60,6 @@ module.exports = {
       }
     }
 
-    // Build modal
     const modal = new ModalBuilder()
       .setCustomId(`announcement:modal:${targetChannel.id}:${pingRoleId}`)
       .setTitle('Announcement erstellen');

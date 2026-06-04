@@ -74,13 +74,13 @@ module.exports = {
       embed.addFields({ name: '🔗 Bezogen auf', value: `Case #${c.parent_case_number}`, inline: true });
     }
 
-    // Stage 2d: Reverse-Lookup auf Report-Quelle (Spec §4.3)
+    // Reverse-Lookup auf Report-Quelle
     let linkedReport = null;
     try {
       linkedReport = await reports.getReportByCaseNumber(interaction.guildId, c.case_number);
     } catch (err) {
       console.warn('getReportByCaseNumber failed:', err);
-      // fail-soft: zeige Case ohne Quelle-Info
+      // Zeige Case ohne Quell-Info
     }
     if (linkedReport) {
       embed.addFields({

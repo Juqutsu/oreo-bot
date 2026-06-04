@@ -117,7 +117,7 @@ module.exports = {
       });
     }
 
-    // 5. Stage 3: Auto-Eskalation (best-effort)
+    // Auto-Eskalation
     try {
       const activeWarnCount = await cases.countActiveWarnings(interaction.guildId, target.id);
       await escalations.applyEscalation({ interaction, target, activeWarnCount });

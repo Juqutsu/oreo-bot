@@ -72,7 +72,7 @@ async function removeRule(guildId, threshold) {
 /**
  * Prüft ob für den gegebenen active-Warn-Count eine Eskalations-Regel existiert
  * und führt sie aus (Discord-Action + Case + Mod-Log-Embed). Best-effort:
- * Discord-Failure → fail-Embed im Mod-Log, kein Case. Stage 3 Spec §3.
+ * Discord-Failure → fail-Embed im Mod-Log, kein Case.
  *
  * @param {object} args
  * @param {import('discord.js').ChatInputCommandInteraction} args.interaction

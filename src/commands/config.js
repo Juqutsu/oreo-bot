@@ -421,7 +421,7 @@ async function handleChannelSet(interaction) {
     });
   }
 
-  // Stage 2d: Report-Channel Permission-Check (Spec §5)
+  // Report-Channel Permission-Check
   let permissionWarnings = [];
   if (type === 'report') {
     try {
@@ -578,7 +578,7 @@ async function handleFeatureSet(interaction) {
 
   let message;
   if (name === 'automod' && value) {
-    message = `Feature \`automod\` aktiviert.\n⚠️ Automod-Logik ist erst ab Stage 4 implementiert. Toggle ist heute ein Stub.`;
+    message = `Feature \`automod\` aktiviert.`;
   } else {
     message = `Feature \`${name}\` ${value ? 'aktiviert' : 'deaktiviert'}.`;
   }
@@ -953,7 +953,7 @@ async function handleShow(interaction) {
     .join('\n');
   const rolesValue = roleRows.length > 0 ? roleLines : '(keine Rollen konfiguriert)';
 
-  // Stage 3: Eskalations-Regeln für show
+  // Eskalations-Regeln für show
   let escalationRules = [];
   try {
     escalationRules = await escalations.listRules(interaction.guildId);

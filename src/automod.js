@@ -161,7 +161,7 @@ async function removeWord(guildId, word) {
   return normalised;
 }
 
-// ---- DAL: automod_exemptions (reuses existing table from Stage 1) ----
+// ---- DAL: automod_exemptions ----
 
 async function getExtraExemptIds(guildId, targetType) {
   const [rows] = await getPool().execute(

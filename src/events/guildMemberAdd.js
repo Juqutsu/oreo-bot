@@ -3,12 +3,10 @@ const config = require('../config');
 const { formatDuration } = require('../duration');
 
 async function execute(member) {
-  // Ignore bots
   if (member.user.bot) return;
 
   const guildId = member.guild.id;
 
-  // 1. Minimum Account Age Check
   try {
     const minDays = await config.getMinAccountAgeDays(guildId);
     if (minDays > 0) {
@@ -23,7 +21,7 @@ async function execute(member) {
             const createdSec = Math.floor(member.user.createdAt.getTime() / 1000);
             const embed = new EmbedBuilder()
               .setTitle('🚨 Verdächtiger Account-Beitritt')
-              .setColor(0xe67e22) // orange
+              .setColor(0xe67e22)
               .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
               .addFields(
                 { name: '👤 User', value: `<@${member.user.id}> (${member.user.tag})`, inline: false },
@@ -42,7 +40,6 @@ async function execute(member) {
     console.error('[account-age-check] failed to check account age:', err);
   }
 
-  // 2. Interactive Captcha Verification
   try {
     const captchaEnabled = await config.getCaptchaEnabled(guildId);
     if (captchaEnabled) {
@@ -51,7 +48,7 @@ async function execute(member) {
 
       const verifyChannel = await member.guild.channels.create({
         name: `verify-${member.user.username.slice(0, 20)}`,
-        type: 0, // GuildText
+        type: 0,
         permissionOverwrites: [
           {
             id: everyone.id,
@@ -72,7 +69,7 @@ async function execute(member) {
 
       const embed = new EmbedBuilder()
         .setTitle('🔐 Server-Verifizierung')
-        .setColor(0x3498db) // Blue
+        .setColor(0x3498db)
         .setDescription(`Willkommen auf **${member.guild.name}**, <@${member.user.id}>!\n\nUm den Server freizuschalten, musst du dich verifizieren.\n\nKlicke auf den Button unten, um das Captcha zu starten.`)
         .setFooter({ text: '🐾 Oreo • Verifizierung' })
         .setTimestamp();
@@ -90,7 +87,6 @@ async function execute(member) {
         components: [row]
       });
 
-      // Set timeout to delete verification channel and kick if not verified within 15 minutes
       setTimeout(async () => {
         const chan = await member.guild.channels.fetch(verifyChannel.id).catch(() => null);
         if (chan) {
