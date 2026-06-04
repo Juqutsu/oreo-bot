@@ -162,3 +162,42 @@ ALTER TABLE reports ADD INDEX idx_resolution_case (guild_id, resolution_case_num
 
 ALTER TABLE infractions MODIFY COLUMN source
   ENUM('manual','automod','api','escalation') NOT NULL DEFAULT 'manual';
+
+-- ============================================================
+-- Stage 5 Migration: AutoMod Tables + automod_hit Case Type
+-- ============================================================
+-- Adds the 'automod_hit' meta-case type and two new tables for
+-- per-filter state and custom wordlist. See:
+-- docs/superpowers/specs/2026-06-04-stage5-automod-design.md §3
+
+-- 1. Extend the case type enum.
+ALTER TABLE infractions MODIFY COLUMN type
+  ENUM('warn','timeout','kick','ban','unban','untimeout',
+       'warn_removed','reason_edited','automod_hit') NOT NULL;
+
+-- 2. Per-filter state. One row per (guild × filter).
+CREATE TABLE IF NOT EXISTS automod_rules (
+  guild_id         BIGINT UNSIGNED NOT NULL,
+  filter_key       ENUM('spam','mention_spam','invite_links',
+                        'keyword_preset','custom_wordlist') NOT NULL,
+  discord_rule_id  BIGINT UNSIGNED NULL,
+  enabled          TINYINT(1) NOT NULL DEFAULT 0,
+  threshold        INT UNSIGNED NULL,
+  preset_flags     TINYINT UNSIGNED NULL,
+  updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                 ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (guild_id, filter_key),
+  FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+);
+
+-- 3. Custom wordlist (one row per word per guild).
+CREATE TABLE IF NOT EXISTS automod_wordlist (
+  id          BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  guild_id    BIGINT UNSIGNED NOT NULL,
+  word        VARCHAR(60) NOT NULL,
+  added_by    BIGINT UNSIGNED NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
+  UNIQUE KEY uq_word_per_guild (guild_id, word),
+  INDEX idx_guild (guild_id)
+);

@@ -15,6 +15,7 @@ async function createCase({
   durationMs = null,
   expiresAt = null,
   source = 'manual',
+  active = 1,
 }) {
   const conn = await getPool().getConnection();
   try {
@@ -36,9 +37,9 @@ async function createCase({
     // 4. Infraction speichern.
     const [result] = await conn.execute(
       `INSERT INTO infractions
-         (guild_id, case_number, user_id, moderator_id, type, source, reason, duration_ms, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [guildId, caseNumber, userId, moderatorId, type, source, reason, durationMs, expiresAt],
+         (guild_id, case_number, user_id, moderator_id, type, source, reason, duration_ms, expires_at, active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [guildId, caseNumber, userId, moderatorId, type, source, reason, durationMs, expiresAt, active],
     );
 
     await conn.commit();
