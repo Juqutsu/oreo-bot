@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const config = require('../config');
 
 const EMOJIS = [
@@ -58,6 +58,23 @@ async function dispatch(interaction) {
 
   if (!customId.startsWith('captcha_')) return false;
 
+  if (customId === 'captcha_global_start') {
+    const verifiedRoleId = await config.getVerifiedRoleId(interaction.guild.id);
+    if (verifiedRoleId && interaction.member.roles.cache.has(verifiedRoleId)) {
+      await interaction.reply({
+        content: '✅ Du bist bereits verifiziert!',
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => null);
+      return true;
+    }
+    const puzzle = generatePuzzle(interaction.user.id, 1);
+    await interaction.reply({
+      ...puzzle,
+      flags: MessageFlags.Ephemeral,
+    }).catch(() => null);
+    return true;
+  }
+
   const parts = customId.split('_');
   const action = parts[1];
   const targetUserId = parts[2];
@@ -65,7 +82,7 @@ async function dispatch(interaction) {
   if (interaction.user.id !== targetUserId) {
     await interaction.reply({
       content: '❌ Diese Verifizierung ist nicht für dich gedacht.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     }).catch(() => null);
     return true;
   }
@@ -75,7 +92,7 @@ async function dispatch(interaction) {
   if (!member) {
     await interaction.reply({
       content: '❌ Benutzer konnte auf dem Server nicht gefunden werden.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     }).catch(() => null);
     return true;
   }
@@ -96,14 +113,20 @@ async function dispatch(interaction) {
 
     const verifiedRoleId = await config.getVerifiedRoleId(guild.id);
     let assignedRoleText = '';
+    let roleError = null;
+    let roleObject = null;
 
     if (verifiedRoleId) {
       const role = guild.roles.cache.get(verifiedRoleId) || await guild.roles.fetch(verifiedRoleId).catch(() => null);
       if (role) {
-        await member.roles.add(role, 'Oreo: Captcha erfolgreich gelöst').catch((err) => {
+        roleObject = role;
+        try {
+          await member.roles.add(role, 'Oreo: Captcha erfolgreich gelöst');
+          assignedRoleText = ` (Rolle <@&${role.id}> zugewiesen)`;
+        } catch (err) {
           console.error(`[captcha] Failed to assign role ${verifiedRoleId} to ${targetUserId}:`, err);
-        });
-        assignedRoleText = ` (Rolle <@&${role.id}> zugewiesen)`;
+          roleError = err;
+        }
       }
     } else {
       let role = guild.roles.cache.find((r) => r.name === 'Member');
@@ -111,6 +134,7 @@ async function dispatch(interaction) {
         role = await guild.roles.create({
           name: 'Member',
           color: 0x2ecc71,
+          permissions: [PermissionFlagsBits.ViewChannel],
           reason: 'Oreo Verifizierungs-Rolle Setup',
         }).catch(() => null);
         if (role) {
@@ -118,8 +142,14 @@ async function dispatch(interaction) {
         }
       }
       if (role) {
-        await member.roles.add(role, 'Oreo: Captcha erfolgreich gelöst').catch(() => null);
-        assignedRoleText = ` (Rolle <@&${role.id}> zugewiesen)`;
+        roleObject = role;
+        try {
+          await member.roles.add(role, 'Oreo: Captcha erfolgreich gelöst');
+          assignedRoleText = ` (Rolle <@&${role.id}> zugewiesen)`;
+        } catch (err) {
+          console.error(`[captcha] Failed to assign role ${role.id} to ${targetUserId}:`, err);
+          roleError = err;
+        }
       }
     }
 
@@ -128,12 +158,22 @@ async function dispatch(interaction) {
       if (channelId) {
         const logChannel = await guild.channels.fetch(channelId).catch(() => null);
         if (logChannel) {
-          const embed = new EmbedBuilder()
-            .setTitle('✅ User verifiziert')
-            .setColor(0x2ecc71)
-            .setDescription(`Der User <@${member.id}> (${member.user.tag}) hat das Captcha erfolgreich gelöst${assignedRoleText}.`)
-            .setFooter({ text: '🐾 Oreo • Captcha' })
-            .setTimestamp();
+          const embed = new EmbedBuilder().setTimestamp();
+
+          if (roleError) {
+            embed
+              .setTitle('⚠️ Verifizierung unvollständig (Rollen-Fehler)')
+              .setColor(0xe67e22)
+              .setDescription(`Der User <@${member.id}> (${member.user.tag}) hat das Captcha gelöst, aber die Rolle <@&${roleObject?.id || verifiedRoleId}> konnte nicht zugewiesen werden.\n\n**Fehler:** \`${roleError.message}\`\n\n*Bitte stelle sicher, dass die Rolle 'Oreo' in der Rollen-Hierarchie über der zuzuweisenden Rolle steht.*`)
+              .setFooter({ text: '🐾 Oreo • Captcha-Fehler' });
+          } else {
+            embed
+              .setTitle('✅ User verifiziert')
+              .setColor(0x2ecc71)
+              .setDescription(`Der User <@${member.id}> (${member.user.tag}) hat das Captcha erfolgreich gelöst${assignedRoleText}.`)
+              .setFooter({ text: '🐾 Oreo • Captcha' });
+          }
+
           await logChannel.send({ embeds: [embed] }).catch(() => null);
         }
       }
@@ -141,9 +181,22 @@ async function dispatch(interaction) {
       console.error('[captcha] failed to send modlog entry:', err);
     }
 
-    setTimeout(async () => {
-      await interaction.channel.delete('Oreo: Verifizierung abgeschlossen.').catch(() => null);
-    }, 1500);
+    const captchaChannelId = await config.getCaptchaChannelId(guild.id);
+    const isGlobal = captchaChannelId && (interaction.channel.id === captchaChannelId);
+
+    if (isGlobal) {
+      await interaction.editReply({
+        content: roleError 
+          ? `⚠️ **Captcha gelöst, aber Rolle konnte nicht zugewiesen werden:** \`${roleError.message}\`\nBitte wende dich an einen Admin.`
+          : '✅ **Erfolgreich verifiziert!** Du hast nun vollen Zugriff auf den Server.',
+        embeds: [],
+        components: [],
+      }).catch(() => null);
+    } else {
+      setTimeout(async () => {
+        await interaction.channel.delete('Oreo: Verifizierung abgeschlossen.').catch(() => null);
+      }, 1500);
+    }
 
     return true;
   }
@@ -151,10 +204,9 @@ async function dispatch(interaction) {
   if (action === 'wrong') {
     if (attempt < 3) {
       const puzzle = generatePuzzle(targetUserId, attempt + 1);
-      await interaction.reply({
+      await interaction.update({
         content: '❌ Falsches Emoji! Versuche es noch einmal.',
         ...puzzle,
-        ephemeral: false,
       });
     } else {
       await interaction.deferUpdate();
@@ -180,9 +232,20 @@ async function dispatch(interaction) {
         console.error('[captcha] failed to send modlog entry:', err);
       }
 
-      setTimeout(async () => {
-        await interaction.channel.delete('Oreo: Verifizierung failed.').catch(() => null);
-      }, 1500);
+      const captchaChannelId = await config.getCaptchaChannelId(guild.id);
+      const isGlobal = captchaChannelId && (interaction.channel.id === captchaChannelId);
+
+      if (isGlobal) {
+        await interaction.editReply({
+          content: '❌ **Verifizierung fehlgeschlagen.** Du wurdest vom Server gekickt.',
+          embeds: [],
+          components: [],
+        }).catch(() => null);
+      } else {
+        setTimeout(async () => {
+          await interaction.channel.delete('Oreo: Verifizierung failed.').catch(() => null);
+        }, 1500);
+      }
     }
     return true;
   }

@@ -4,12 +4,11 @@ async function execute(member) {
   if (member.user.bot) return;
 
   const guild = member.guild;
-  const usernameClean = member.user.username.slice(0, 20).toLowerCase();
 
   try {
     const channels = await guild.channels.fetch();
     const verifyChan = channels.find(
-      (c) => c.name.toLowerCase() === `verify-${usernameClean}`
+      (c) => c.name === `verify-${member.user.id}`
     );
     if (verifyChan) {
       await verifyChan.delete('Oreo: User hat den Server verlassen.').catch(() => null);

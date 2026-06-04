@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -205,6 +205,24 @@ async function removeBadWord(guildId, word) {
   );
 }
 
+/**
+ * Liefert die ID des globalen Captcha-Channels.
+ */
+async function getCaptchaChannelId(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.captcha_channel_id ? String(row.captcha_channel_id) : null;
+}
+
+/**
+ * Setzt die ID des globalen Captcha-Channels.
+ */
+async function setCaptchaChannelId(guildId, channelId) {
+  await getPool().execute(
+    'UPDATE guilds SET captcha_channel_id = ? WHERE guild_id = ?',
+    [channelId || null, guildId]
+  );
+}
+
 module.exports = {
   getModLogChannelId,
   getReportChannelId,
@@ -225,5 +243,7 @@ module.exports = {
   getBadWords,
   addBadWord,
   removeBadWord,
+  getCaptchaChannelId,
+  setCaptchaChannelId,
 };
 

@@ -2,6 +2,7 @@
 // Run with: node --env-file=.env tests/smoke/captcha_and_toxicity.js
 
 const assert = require('node:assert/strict');
+const { MessageFlags } = require('discord.js');
 const { getPool } = require('../../src/db');
 const config = require('../../src/config');
 const obfuscation = require('../../src/obfuscation');
@@ -19,14 +20,15 @@ async function main() {
 
   // Setup guild configuration
   await pool.query(
-    `INSERT INTO guilds (guild_id, mod_log_channel_id, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action)
-     VALUES (?, ?, 1, ?, 1, 'warn')
+    `INSERT INTO guilds (guild_id, mod_log_channel_id, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id)
+     VALUES (?, ?, 1, ?, 1, 'warn', NULL)
      ON DUPLICATE KEY UPDATE 
        mod_log_channel_id = VALUES(mod_log_channel_id),
        captcha_enabled = VALUES(captcha_enabled),
        verified_role_id = VALUES(verified_role_id),
        toxicity_enabled = VALUES(toxicity_enabled),
-       toxicity_action = VALUES(toxicity_action)`,
+       toxicity_action = VALUES(toxicity_action),
+       captcha_channel_id = NULL`,
     [GUILD_ID, MODLOG_CHANNEL_ID, VERIFIED_ROLE_ID]
   );
 
@@ -253,6 +255,60 @@ async function main() {
     assert.equal(muteCases.length, 1, 'Should log a mute infraction in database');
 
     console.log('   Test 4 passed');
+  }
+
+  // Test 5: Global Verification Channel
+  {
+    console.log('Running Test 5: Global Verification Channel...');
+    assignedRoles = [];
+    deletedChannels = [];
+    sentEmbeds = [];
+    let editReplies = [];
+    let replies = [];
+
+    // Set global captcha channel in DB
+    await pool.query("UPDATE guilds SET captcha_channel_id = ? WHERE guild_id = ?", [mockChannel.id, GUILD_ID]);
+
+    // 1. Click global start button
+    const mockStartInteraction = {
+      customId: 'captcha_global_start',
+      user: { id: '1509540000000000001' },
+      member: { roles: { cache: new Map() } },
+      guild: mockGuild,
+      channel: mockChannel,
+      reply: async (payload) => {
+        replies.push(payload);
+      }
+    };
+
+    let handled = await captcha.dispatch(mockStartInteraction);
+    assert.ok(handled, 'Should handle global start button');
+    assert.equal(replies.length, 1, 'Should send ephemeral captcha reply');
+    assert.ok(replies[0].flags === MessageFlags.Ephemeral || replies[0].ephemeral, 'Reply should be ephemeral');
+
+    // 2. Click correct emoji
+    const mockCorrectInteraction = {
+      customId: `captcha_correct_1509540000000000001_1_🍎`,
+      user: { id: '1509540000000000001' },
+      guild: mockGuild,
+      channel: mockChannel,
+      deferUpdate: async () => {},
+      editReply: async (payload) => {
+        editReplies.push(payload);
+      }
+    };
+
+    handled = await captcha.dispatch(mockCorrectInteraction);
+    assert.ok(handled, 'Should handle captcha correct action');
+
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+
+    assert.equal(assignedRoles.length, 1, 'Should assign verified role');
+    assert.equal(deletedChannels.length, 0, 'Should NOT delete the global verification channel');
+    assert.equal(editReplies.length, 1, 'Should update ephemeral reply with success text');
+    assert.ok(editReplies[0].content.includes('Erfolgreich verifiziert'), 'Success text should match');
+
+    console.log('   Test 5 passed');
   }
 
   console.log('OK — captcha_and_toxicity smoke-test passed');

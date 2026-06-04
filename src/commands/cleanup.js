@@ -45,14 +45,10 @@ module.exports = {
       });
     }
 
-    const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-
     const filtered = [...fetched.values()].filter((m) => {
       if (userFilter && m.author.id !== userFilter.id) return false;
       if (containsFilter && !m.content?.toLowerCase().includes(containsFilter.toLowerCase())) return false;
       if (botsOnly && !m.author.bot) return false;
-      if (now - m.createdTimestamp > FOURTEEN_DAYS_MS) return false;
       return true;
     });
 

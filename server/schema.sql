@@ -242,6 +242,13 @@ CREATE TABLE IF NOT EXISTS bad_words (
   FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
 );
 
+-- ============================================================
+-- Stage 12 Migration: Expiry & Decay Index Optimization
+-- ============================================================
+ALTER TABLE infractions ADD INDEX idx_active_type_expires (active, type, expires_at);
+ALTER TABLE infractions ADD INDEX idx_active_type_created (active, type, created_at);
 
-
-
+-- ============================================================
+-- Stage 13 Migration: Global Captcha Verification Channel
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN captcha_channel_id BIGINT UNSIGNED NULL;

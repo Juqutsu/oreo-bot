@@ -16,6 +16,10 @@ module.exports = {
       return interaction.reply({ content: '❌ Nur Text-Channels.', flags: MessageFlags.Ephemeral });
     }
 
+    if (channel.isThread()) {
+      return interaction.reply({ content: '❌ Dieser Befehl kann nicht in Threads ausgeführt werden.', flags: MessageFlags.Ephemeral });
+    }
+
     const botPerms = channel.permissionsFor(guild.members.me);
     if (!botPerms?.has([PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels])) {
       return interaction.reply({

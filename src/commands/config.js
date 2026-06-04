@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getPool } = require('../db');
 const escalations = require('../escalations');
 const { parseDuration, formatDuration, MAX_TIMEOUT_MS } = require('../duration');
@@ -117,6 +117,7 @@ module.exports = {
           sub.setName('set-captcha').setDescription('Aktiviert/deaktiviert die Captcha-Verifizierung bei Beitritt.')
             .addBooleanOption((o) => o.setName('enabled').setDescription('Aktiviert?').setRequired(true))
             .addRoleOption((o) => o.setName('role').setDescription('Rolle, die nach Verifizierung vergeben wird').setRequired(false))
+            .addChannelOption((o) => o.setName('channel').setDescription('Kanal für die globale Verifizierung').setRequired(false).addChannelTypes(ChannelType.GuildText))
         )
         .addSubcommand((sub) =>
           sub.setName('set-toxicity').setDescription('Aktiviert/deaktiviert den Toxizitäts-Filter.')
@@ -757,7 +758,13 @@ async function handleSecuritySetWarnDecay(interaction) {
 async function handleSecuritySetCaptcha(interaction) {
   const enabled = interaction.options.getBoolean('enabled');
   const role = interaction.options.getRole('role');
+  const channel = interaction.options.getChannel('channel');
   const config = require('../config');
+  const guild = interaction.guild;
+
+  let verifiedRole = role;
+  let captchaChannel = channel;
+  let permError = null;
 
   try {
     const pool = getPool();
@@ -774,10 +781,141 @@ async function handleSecuritySetCaptcha(interaction) {
     });
   }
 
-  const roleText = role ? ` mit Rolle <@&${role.id}>` : '';
-  const message = enabled
-    ? `✅ Captcha-Verifizierung bei Server-Beitritt **aktiviert**${roleText}.`
+  try {
+    if (enabled) {
+      // 1. Resolve/create verified role
+      if (!verifiedRole) {
+        const verifiedRoleId = await config.getVerifiedRoleId(guild.id);
+        if (verifiedRoleId) {
+          verifiedRole = guild.roles.cache.get(verifiedRoleId) || await guild.roles.fetch(verifiedRoleId).catch(() => null);
+        }
+      }
+      if (!verifiedRole) {
+        verifiedRole = guild.roles.cache.find((r) => r.name === 'Member');
+      }
+      if (!verifiedRole) {
+        verifiedRole = await guild.roles.create({
+          name: 'Member',
+          color: 0x2ecc71,
+          permissions: [PermissionFlagsBits.ViewChannel],
+          reason: 'Oreo Verifizierungs-Rolle Setup',
+        });
+        await config.setVerifiedRoleId(guild.id, verifiedRole.id);
+      }
+
+      // 2. Resolve/create global captcha channel
+      if (!captchaChannel) {
+        const captchaChannelId = await config.getCaptchaChannelId(guild.id);
+        if (captchaChannelId) {
+          captchaChannel = guild.channels.cache.get(captchaChannelId) || await guild.channels.fetch(captchaChannelId).catch(() => null);
+        }
+      }
+      if (!captchaChannel) {
+        captchaChannel = guild.channels.cache.find((c) => c.name === 'verify' || c.name === 'verifizierung');
+      }
+      if (!captchaChannel) {
+        captchaChannel = await guild.channels.create({
+          name: 'verify',
+          type: ChannelType.GuildText,
+          reason: 'Oreo Globaler Verifizierungs-Channel Setup',
+        });
+      }
+
+      if (captchaChannel) {
+        await config.setCaptchaChannelId(guild.id, captchaChannel.id);
+
+        // Make sure @everyone can view this channel explicitly
+        const everyone = guild.roles.everyone;
+        await captchaChannel.permissionOverwrites.create(everyone.id, {
+          ViewChannel: true,
+          SendMessages: false,
+          AddReactions: false,
+          ReadMessageHistory: true,
+        }, { reason: 'Oreo: Globaler Verifizierungs-Channel Sichtbarkeit für Unverifizierte' }).catch(() => null);
+
+        // Send captcha prompt if not already exists
+        const messages = await captchaChannel.messages.fetch({ limit: 50 }).catch(() => null);
+        let existingMsg = null;
+        if (messages) {
+          existingMsg = messages.find(m => m.author.id === guild.members.me.id && m.components.some(row => row.components.some(c => c.customId === 'captcha_global_start')));
+        }
+        if (!existingMsg) {
+          const embed = new EmbedBuilder()
+            .setTitle('🔐 Server-Verifizierung')
+            .setColor(0x3498db)
+            .setDescription(`Willkommen auf **${guild.name}**!\n\nUm Zugriff auf den Server zu erhalten, musst du dich verifizieren.\n\nKlicke auf den Button unten, um das Captcha zu starten.`)
+            .setFooter({ text: '🐾 Oreo • Verifizierung' })
+            .setTimestamp();
+
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`captcha_global_start`)
+              .setLabel('Verifizierung starten')
+              .setStyle(ButtonStyle.Primary)
+          );
+
+          await captchaChannel.send({
+            embeds: [embed],
+            components: [row]
+          });
+        }
+      }
+
+      // Remove ViewChannel from @everyone globally
+      const everyone = guild.roles.everyone;
+      if (everyone.permissions.has(PermissionFlagsBits.ViewChannel)) {
+        const newPerms = everyone.permissions.remove(PermissionFlagsBits.ViewChannel);
+        await everyone.setPermissions(newPerms, 'Oreo: Captcha-Schutz aktiviert');
+      }
+
+      // Add ViewChannel to the verified role globally
+      if (verifiedRole && !verifiedRole.permissions.has(PermissionFlagsBits.ViewChannel)) {
+        const newPerms = verifiedRole.permissions.add(PermissionFlagsBits.ViewChannel);
+        await verifiedRole.setPermissions(newPerms, 'Oreo: Captcha-Schutz aktiviert');
+      }
+    } else {
+      // Disable captcha
+      const captchaChannelId = await config.getCaptchaChannelId(guild.id);
+      if (captchaChannelId) {
+        const chan = guild.channels.cache.get(captchaChannelId) || await guild.channels.fetch(captchaChannelId).catch(() => null);
+        if (chan) {
+          const messages = await chan.messages.fetch({ limit: 50 }).catch(() => null);
+          if (messages) {
+            const msgToDelete = messages.find(m => m.author.id === guild.members.me.id && m.components.some(row => row.components.some(c => c.customId === 'captcha_global_start')));
+            if (msgToDelete) {
+              await msgToDelete.delete().catch(() => null);
+            }
+          }
+        }
+      }
+      await config.setCaptchaChannelId(guild.id, null);
+
+      // Restore ViewChannel to @everyone globally
+      const everyone = guild.roles.everyone;
+      if (!everyone.permissions.has(PermissionFlagsBits.ViewChannel)) {
+        const newPerms = everyone.permissions.add(PermissionFlagsBits.ViewChannel);
+        await everyone.setPermissions(newPerms, 'Oreo: Captcha-Schutz deaktiviert');
+      }
+    }
+  } catch (err) {
+    console.error('[captcha-setup] failed to configure role permissions:', err);
+    permError = err.message;
+  }
+
+  const roleDisplay = verifiedRole ? ` mit Rolle <@&${verifiedRole.id}>` : (role ? ` mit Rolle <@&${role.id}>` : '');
+  const chanDisplay = captchaChannel ? ` im Kanal <#${captchaChannel.id}>` : '';
+  let message = enabled
+    ? `✅ Captcha-Verifizierung bei Server-Beitritt **aktiviert**${roleDisplay}${chanDisplay}.`
     : '✅ Captcha-Verifizierung **deaktiviert**.';
+
+  if (permError) {
+    message += `\n\n⚠️ **Hinweis:** Die Berechtigungen konnten nicht automatisch angepasst werden (${permError}). Bitte stelle sicher, dass der Bot die Berechtigung 'Rollen verwalten' und 'Kanäle verwalten' hat und seine Rolle in den Einstellungen ganz oben steht.`;
+  } else if (enabled) {
+    message += `\n🔒 Kanäle wurden für @everyone verborgen und sind nun erst nach dem Lösen des Captchas (über die Rolle) sichtbar.`;
+  } else {
+    message += `\n🔓 Kanäle sind wieder für @everyone sichtbar gemacht worden.`;
+  }
+
   return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
 }
 

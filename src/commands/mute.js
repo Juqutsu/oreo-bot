@@ -3,52 +3,7 @@ const cases = require('../cases');
 const config = require('../config');
 const { buildModLogEmbed } = require('../modlog');
 const { parseDuration } = require('../duration');
-
-async function getOrCreateMutedRole(guild) {
-  const guildId = guild.id;
-  let roleId = await config.getMutedRoleId(guildId);
-  let role = null;
-
-  if (roleId) {
-    role = guild.roles.cache.get(roleId) || await guild.roles.fetch(roleId).catch(() => null);
-  }
-
-  if (!role) {
-    role = guild.roles.cache.find((r) => r.name === 'Muted') || null;
-    if (role) {
-      await config.setMutedRoleId(guildId, role.id);
-    }
-  }
-
-  if (!role) {
-    role = await guild.roles.create({
-      name: 'Muted',
-      color: 0x818386,
-      reason: 'Oreo Muted-Rolle Setup',
-    }).catch((err) => {
-      console.error('Konnte Muted-Rolle nicht erstellen:', err);
-      return null;
-    });
-
-    if (role) {
-      await config.setMutedRoleId(guildId, role.id);
-
-      // Edit channel overwrites (best-effort)
-      const channels = await guild.channels.fetch().catch(() => new Map());
-      for (const [_, channel] of channels) {
-        if (channel.isTextBased() || channel.isVoiceBased()) {
-          await channel.permissionOverwrites.create(role, {
-            SendMessages: false,
-            AddReactions: false,
-            Speak: false,
-          }, { reason: 'Oreo Muted-Rolle Setup' }).catch(() => null);
-        }
-      }
-    }
-  }
-
-  return role;
-}
+const { getOrCreateMutedRole } = require('../composables/mutedRole');
 
 module.exports = {
   data: new SlashCommandBuilder()

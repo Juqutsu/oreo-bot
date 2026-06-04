@@ -48,8 +48,30 @@ client.once(Events.ClientReady, (c) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  // Monkey-patch interaction.reply to automatically use editReply if deferred or replied
+  if (interaction.reply && !interaction.reply.patched) {
+    const originalReply = interaction.reply;
+    interaction.reply = async function (options) {
+      if (this.deferred || this.replied) {
+        return this.editReply(options);
+      }
+      return originalReply.call(this, options);
+    };
+    interaction.reply.patched = true;
+  }
+
   // Slash-command path (including autocomplete) — existing behavior, unchanged
   if (interaction.isChatInputCommand() || interaction.isAutocomplete()) {
+    if (!interaction.guildId) {
+      if (interaction.isChatInputCommand()) {
+        await interaction.reply({
+          content: '❌ Befehle können nur auf einem Discord-Server verwendet werden.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
+      return;
+    }
+
     const command = client.commands.get(interaction.commandName);
     if (!command) return;
 
@@ -63,17 +85,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    // Auto-defer all slash commands except announcement (which needs to show modal first)
+    if (interaction.isChatInputCommand() && interaction.commandName !== 'announcement') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+    }
+
     if (command.requiredTier) {
       let allowed;
       try {
         allowed = await perms.requireTier(interaction, command.requiredTier);
       } catch (err) {
         console.error(`Tier-Check für "${interaction.commandName}" fehlgeschlagen:`, err);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: 'Beim Ausführen des Commands ist etwas schiefgegangen.',
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
+        const reply = { content: 'Beim Ausführen des Commands ist etwas schiefgegangen.', flags: MessageFlags.Ephemeral };
+        if (interaction.deferred && !interaction.replied) {
+          await interaction.editReply(reply).catch(() => {});
+        } else if (interaction.replied) {
+          await interaction.followUp(reply).catch(() => {});
+        } else {
+          await interaction.reply(reply).catch(() => {});
         }
         return;
       }
@@ -88,7 +117,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } catch (err) {
       console.error(`Command "${interaction.commandName}" failed:`, err);
       const reply = { content: 'Beim Ausführen des Commands ist etwas schiefgegangen.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) {
+      if (interaction.deferred && !interaction.replied) {
+        await interaction.editReply(reply).catch(() => {});
+      } else if (interaction.replied) {
         await interaction.followUp(reply).catch(() => {});
       } else {
         await interaction.reply(reply).catch(() => {});

@@ -4,56 +4,15 @@ const cases = require('../cases');
 const { buildModLogEmbed } = require('../modlog');
 const escalations = require('../escalations');
 const obfuscation = require('../obfuscation');
-
-async function getOrCreateMutedRole(guild) {
-  const guildId = guild.id;
-  let roleId = await config.getMutedRoleId(guildId);
-  let role = null;
-
-  if (roleId) {
-    role = guild.roles.cache.get(roleId) || await guild.roles.fetch(roleId).catch(() => null);
-  }
-
-  if (!role) {
-    role = guild.roles.cache.find((r) => r.name === 'Muted') || null;
-    if (role) {
-      await config.setMutedRoleId(guildId, role.id);
-    }
-  }
-
-  if (!role) {
-    role = await guild.roles.create({
-      name: 'Muted',
-      color: 0x818386,
-      reason: 'Oreo Muted-Rolle Setup',
-    }).catch((err) => {
-      console.error('[messageCreate] Konnte Muted-Rolle nicht erstellen:', err);
-      return null;
-    });
-
-    if (role) {
-      await config.setMutedRoleId(guildId, role.id);
-
-      const channels = await guild.channels.fetch().catch(() => new Map());
-      for (const [_, channel] of channels) {
-        if (channel.isTextBased() || channel.isVoiceBased()) {
-          await channel.permissionOverwrites.create(role, {
-            SendMessages: false,
-            AddReactions: false,
-            Speak: false,
-          }, { reason: 'Oreo Muted-Rolle Setup' }).catch(() => null);
-        }
-      }
-    }
-  }
-
-  return role;
-}
+const { getOrCreateMutedRole } = require('../composables/mutedRole');
 
 async function execute(message) {
   if (message.author.bot || !message.guild) return;
 
-  if (message.member?.permissions.has(PermissionFlagsBits.ManageMessages) || message.member?.permissions.has(PermissionFlagsBits.Administrator)) {
+  const member = message.member ?? await message.guild.members.fetch(message.author.id).catch(() => null);
+  if (!member) return;
+
+  if (member.permissions.has(PermissionFlagsBits.ManageMessages) || member.permissions.has(PermissionFlagsBits.Administrator)) {
     return;
   }
 
@@ -129,7 +88,7 @@ async function execute(message) {
       } else if (action === 'mute') {
         const role = await getOrCreateMutedRole(message.guild);
         if (role) {
-          await message.member.roles.add(role, 'Oreo: Toxizitäts-Filter Verstoß').catch((err) => {
+          await member.roles.add(role, 'Oreo: Toxizitäts-Filter Verstoß').catch((err) => {
             console.error('[messageCreate] failed to assign Muted role:', err);
           });
         }

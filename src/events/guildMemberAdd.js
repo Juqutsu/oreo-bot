@@ -43,74 +43,93 @@ async function execute(member) {
   try {
     const captchaEnabled = await config.getCaptchaEnabled(guildId);
     if (captchaEnabled) {
+      const captchaChannelId = await config.getCaptchaChannelId(guildId);
       const everyone = member.guild.roles.everyone;
-      const botMember = member.guild.members.me;
+      const botId = member.client.user.id;
 
-      const verifyChannel = await member.guild.channels.create({
-        name: `verify-${member.user.username.slice(0, 20)}`,
-        type: 0,
-        permissionOverwrites: [
-          {
-            id: everyone.id,
-            deny: ['ViewChannel'],
-          },
-          {
-            id: member.id,
-            allow: ['ViewChannel', 'ReadMessageHistory'],
-            deny: ['SendMessages', 'AddReactions'],
-          },
-          {
-            id: botMember.id,
-            allow: ['ViewChannel', 'SendMessages', 'ManageChannels', 'ManageRoles', 'ReadMessageHistory'],
-          }
-        ],
-        reason: 'Oreo Captcha-Verifizierung Setup',
-      });
+      let verifyChannel = null;
 
-      const embed = new EmbedBuilder()
-        .setTitle('🔐 Server-Verifizierung')
-        .setColor(0x3498db)
-        .setDescription(`Willkommen auf **${member.guild.name}**, <@${member.user.id}>!\n\nUm den Server freizuschalten, musst du dich verifizieren.\n\nKlicke auf den Button unten, um das Captcha zu starten.`)
-        .setFooter({ text: '🐾 Oreo • Verifizierung' })
-        .setTimestamp();
+      if (captchaChannelId) {
+        verifyChannel = await member.guild.channels.fetch(captchaChannelId).catch(() => null);
+        if (verifyChannel) {
+          // Welcome member in DMs and point to verify channel
+          await member.send({
+            content: `Willkommen auf **${member.guild.name}**! Bitte verifiziere dich im Kanal <#${captchaChannelId}>, um vollen Zugriff auf den Server zu erhalten.`
+          }).catch(() => {});
+        }
+      }
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`captcha_start_${member.id}`)
-          .setLabel('Verifizierung starten')
-          .setStyle(ButtonStyle.Primary)
-      );
+      const isGlobal = !!verifyChannel;
 
-      await verifyChannel.send({
-        content: `<@${member.id}>`,
-        embeds: [embed],
-        components: [row]
-      });
+      if (!isGlobal) {
+        verifyChannel = await member.guild.channels.create({
+          name: `verify-${member.user.id}`,
+          type: 0,
+          permissionOverwrites: [
+            {
+              id: everyone.id,
+              deny: ['ViewChannel'],
+            },
+            {
+              id: member.id,
+              allow: ['ViewChannel', 'ReadMessageHistory'],
+              deny: ['SendMessages', 'AddReactions'],
+            },
+            {
+              id: botId,
+              allow: ['ViewChannel', 'SendMessages', 'ManageChannels', 'ManageRoles', 'ReadMessageHistory'],
+            }
+          ],
+          reason: 'Oreo Captcha-Verifizierung Setup',
+        });
+
+        const embed = new EmbedBuilder()
+          .setTitle('🔐 Server-Verifizierung')
+          .setColor(0x3498db)
+          .setDescription(`Willkommen auf **${member.guild.name}**, <@${member.user.id}>!\n\nUm den Server freizuschalten, musst du dich verifizieren.\n\nKlicke auf den Button unten, um das Captcha zu starten.`)
+          .setFooter({ text: '🐾 Oreo • Verifizierung' })
+          .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`captcha_start_${member.id}`)
+            .setLabel('Verifizierung starten')
+            .setStyle(ButtonStyle.Primary)
+        );
+
+        await verifyChannel.send({
+          content: `<@${member.id}>`,
+          embeds: [embed],
+          components: [row]
+        });
+      }
 
       setTimeout(async () => {
-        const chan = await member.guild.channels.fetch(verifyChannel.id).catch(() => null);
-        if (chan) {
-          const currentMember = await member.guild.members.fetch(member.id).catch(() => null);
-          if (currentMember) {
-            const verifiedRoleId = await config.getVerifiedRoleId(guildId);
-            const hasRole = verifiedRoleId ? currentMember.roles.cache.has(verifiedRoleId) : false;
-            if (!hasRole) {
-              await currentMember.kick('Oreo: Verifizierung abgelaufen').catch(() => null);
-              const logChannelId = await config.getModLogChannelId(guildId);
-              if (logChannelId) {
-                const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
-                if (logChannel) {
-                  const logEmbed = new EmbedBuilder()
-                    .setTitle('❌ Verifizierung abgelaufen')
-                    .setColor(0xe74c3c)
-                    .setDescription(`Die Verifizierungszeit für <@${member.user.id}> (${member.user.tag}) ist abgelaufen. Der User wurde gekickt.`)
-                    .setTimestamp();
-                  await logChannel.send({ embeds: [logEmbed] }).catch(() => null);
-                }
+        const currentMember = await member.guild.members.fetch(member.id).catch(() => null);
+        if (currentMember) {
+          const verifiedRoleId = await config.getVerifiedRoleId(guildId);
+          const hasRole = verifiedRoleId ? currentMember.roles.cache.has(verifiedRoleId) : false;
+          if (!hasRole) {
+            await currentMember.kick('Oreo: Verifizierung abgelaufen').catch(() => null);
+            const logChannelId = await config.getModLogChannelId(guildId);
+            if (logChannelId) {
+              const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
+              if (logChannel) {
+                const logEmbed = new EmbedBuilder()
+                  .setTitle('❌ Verifizierung abgelaufen')
+                  .setColor(0xe74c3c)
+                  .setDescription(`Die Verifizierungszeit für <@${member.user.id}> (${member.user.tag}) ist abgelaufen. Der User wurde gekickt.`)
+                  .setTimestamp();
+                await logChannel.send({ embeds: [logEmbed] }).catch(() => null);
               }
             }
           }
-          await chan.delete('Oreo: Verifizierung abgelaufen').catch(() => null);
+        }
+        if (!isGlobal && verifyChannel) {
+          const chan = await member.guild.channels.fetch(verifyChannel.id).catch(() => null);
+          if (chan) {
+            await chan.delete('Oreo: Verifizierung abgelaufen').catch(() => null);
+          }
         }
       }, 15 * 60 * 1000);
     }
