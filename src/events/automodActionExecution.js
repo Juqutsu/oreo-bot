@@ -61,7 +61,7 @@ async function execute(execution) {
     let username = null;
     try {
       const user = await execution.client.users.fetch(execution.userId);
-      username = user?.tag ?? null;
+      username = user?.globalName ?? user?.username ?? null;
     } catch { /* unknown user — fall through */ }
 
     const embed = modlog.buildAutoModHitEmbed({
