@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS infractions (
   case_number   INT UNSIGNED NOT NULL,
   user_id       BIGINT UNSIGNED NOT NULL,
   moderator_id  BIGINT UNSIGNED NOT NULL,
-  type          ENUM('warn','timeout','kick','ban','unban','untimeout') NOT NULL,
+  type          ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited','automod_hit') NOT NULL,
   source        ENUM('manual','automod','api') NOT NULL DEFAULT 'manual',
   reason        VARCHAR(512) NULL,
   duration_ms   BIGINT UNSIGNED NULL,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS automod_exemptions (
 -- Neue ENUM-Werte für Meta-Cases. MODIFY COLUMN ist idempotent —
 -- MySQL setzt die Spalten-Definition auf den Soll-Zustand.
 ALTER TABLE infractions MODIFY COLUMN type
-  ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited') NOT NULL;
+  ENUM('warn','timeout','kick','ban','unban','untimeout','warn_removed','reason_edited','automod_hit') NOT NULL;
 
 -- parent_case_number: Verbindung von Meta-Cases zum Original-Case.
 -- ADD COLUMN ohne IF NOT EXISTS (MySQL unterstützt IF NOT EXISTS nicht);

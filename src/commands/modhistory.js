@@ -8,6 +8,7 @@ const TYPE_ICONS = {
   kick: '👢',
   ban: '🔨',
   unban: '🔓',
+  automod_hit: '🛡️',
 };
 
 module.exports = {

@@ -11,6 +11,7 @@ const TYPE_LABELS = {
   unban: '🔓 Unban',
   warn_removed: '✅ Verwarnung entfernt',
   reason_edited: '📝 Grund editiert',
+  automod_hit: '🛡️ AutoMod Hit',
 };
 
 const TYPE_COLORS = {
@@ -22,6 +23,7 @@ const TYPE_COLORS = {
   unban: 0x57f287,
   warn_removed: 0x57f287,
   reason_edited: 0x5865f2,
+  automod_hit: 0xf59e0b,
 };
 
 module.exports = {

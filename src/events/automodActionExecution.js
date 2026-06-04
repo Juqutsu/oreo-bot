@@ -39,7 +39,7 @@ async function execute(execution) {
     const result = await cases.createCase({
       guildId:     execution.guild.id,
       userId:      execution.userId,
-      moderatorId: execution.client.user.id,
+      moderatorId: execution.guild.client.user.id,
       type:        'automod_hit',
       source:      'automod',
       reason:      buildReason(filterKey, matchedRaw, channelMention),
@@ -60,7 +60,7 @@ async function execute(execution) {
 
     let username = null;
     try {
-      const user = await execution.client.users.fetch(execution.userId);
+      const user = await execution.guild.client.users.fetch(execution.userId);
       username = user?.globalName ?? user?.username ?? null;
     } catch { /* unknown user — fall through */ }
 
