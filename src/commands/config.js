@@ -103,6 +103,13 @@ module.exports = {
           sub.setName('list').setDescription('Zeigt alle konfigurierten Eskalations-Regeln.')
         )
     )
+    .addSubcommandGroup((group) =>
+      group.setName('security').setDescription('Sicherheitseinstellungen')
+        .addSubcommand((sub) =>
+          sub.setName('set-age').setDescription('Setzt die Mindestalter-Prüfung für beigetretene Accounts.')
+            .addIntegerOption((o) => o.setName('days').setDescription('Mindestalter in Tagen (0 = deaktiviert)').setRequired(true).setMinValue(0).setMaxValue(30))
+        )
+    )
     .addSubcommand((sub) =>
       sub.setName('show').setDescription('Zeigt die komplette Server-Konfiguration.')
     ),
@@ -133,6 +140,10 @@ module.exports = {
       if (sub === 'set')   return handleEscalationSet(interaction);
       if (sub === 'unset') return handleEscalationUnset(interaction);
       if (sub === 'list')  return handleEscalationList(interaction);
+    }
+
+    if (group === 'security') {
+      if (sub === 'set-age') return handleSecuritySetAge(interaction);
     }
 
     if (group === null && sub === 'show') {
@@ -662,13 +673,36 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+async function handleSecuritySetAge(interaction) {
+  const days = interaction.options.getInteger('days');
+  const pool = getPool();
+  try {
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await pool.execute(
+      'UPDATE guilds SET min_account_age_days = ? WHERE guild_id = ?',
+      [days, interaction.guildId]
+    );
+  } catch (err) {
+    console.error('/config security set-age DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const message = days > 0
+    ? `✅ Mindestalter für beigetretene Accounts auf **${days} Tage** gesetzt. Jüngere Accounts werden im Mod-Log geflaggt.`
+    : '✅ Mindestalter-Prüfung deaktiviert.';
+  return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+}
+
 async function handleShow(interaction) {
   let guildRow;
   let roleRows;
   try {
     const pool = getPool();
     const [gRows] = await pool.execute(
-      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, automod_enabled, next_case_number FROM guilds WHERE guild_id = ?',
+      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, automod_enabled, next_case_number FROM guilds WHERE guild_id = ?',
       [interaction.guildId],
     );
     guildRow = gRows[0] ?? null;
@@ -701,6 +735,8 @@ async function handleShow(interaction) {
   // Features
   const automodOn = Boolean(guildRow?.automod_enabled);
   const automodLine = automodOn ? '✅ aktiv' : '❌ deaktiviert';
+  const minAge = guildRow?.min_account_age_days ? Number(guildRow.min_account_age_days) : 0;
+  const minAgeLine = minAge > 0 ? `⚠️ Flag unter ${minAge} Tagen` : '❌ inaktiv';
 
   // Stats — next_case_number stores the LAST assigned (atomic LAST_INSERT_ID pattern in cases.js).
   // Next-to-assign = stored + 1. If no row exists yet, the first case will be #1.
@@ -742,7 +778,7 @@ async function handleShow(interaction) {
     .setColor(0x5865f2)
     .addFields(
       { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}`, inline: false },
-      { name: '⚙️ Features',     value: `Automod: ${automodLine}`,                       inline: false },
+      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}`,   inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
       { name: '🔐 Rollen-Tiers', value: rolesValue,                                       inline: false },

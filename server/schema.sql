@@ -209,3 +209,10 @@ CREATE TABLE IF NOT EXISTS automod_wordlist (
 -- and edited message logs.
 ALTER TABLE guilds ADD COLUMN msg_log_channel_id BIGINT UNSIGNED NULL AFTER mod_log_channel_id;
 
+-- ============================================================
+-- Stage 9 Migration: Account Age Check
+-- ============================================================
+-- Adds a column to configure the minimum account age for joins
+ALTER TABLE guilds ADD COLUMN min_account_age_days INT UNSIGNED NOT NULL DEFAULT 0;
+
+
