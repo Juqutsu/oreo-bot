@@ -119,7 +119,7 @@ async function getWordlist(guildId) {
 }
 
 async function countWords(guildId) {
-  const [[row]] = await getPool().query(
+  const [[row]] = await getPool().execute(
     `SELECT COUNT(*) AS n FROM automod_wordlist WHERE guild_id = ?`,
     [guildId],
   );
@@ -130,15 +130,20 @@ async function addWord(guildId, word, addedBy) {
   const normalised = word.trim().toLowerCase();
   if (normalised.length === 0)                     throw new AutoModError('WORD_EMPTY');
   if (normalised.length > LIMIT_WORD_LENGTH)       throw new AutoModError('WORD_TOO_LONG', normalised.length);
-  if ((await countWords(guildId)) >= LIMIT_WORDLIST_TOTAL) {
-    throw new AutoModError('WORDLIST_FULL', LIMIT_WORDLIST_TOTAL);
-  }
   try {
     await getPool().execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [guildId]);
-    await getPool().execute(
-      `INSERT INTO automod_wordlist (guild_id, word, added_by) VALUES (?, ?, ?)`,
-      [guildId, normalised, addedBy],
+    // Atomic insert: the sub-select guard prevents going over LIMIT_WORDLIST_TOTAL even
+    // under concurrent calls. MySQL evaluates the WHERE before constraint checks, so
+    // affectedRows=0 means the cap was hit, while 1062 (caught below) means duplicate.
+    const [result] = await getPool().execute(
+      `INSERT INTO automod_wordlist (guild_id, word, added_by)
+         SELECT ?, ?, ?
+          WHERE (SELECT COUNT(*) FROM automod_wordlist WHERE guild_id = ?) < ?`,
+      [guildId, normalised, addedBy, guildId, LIMIT_WORDLIST_TOTAL],
     );
+    if (result.affectedRows === 0) {
+      throw new AutoModError('WORDLIST_FULL', LIMIT_WORDLIST_TOTAL);
+    }
   } catch (err) {
     if (err.errno === 1062) throw new AutoModError('WORD_DUPLICATE', normalised);
     throw err;
