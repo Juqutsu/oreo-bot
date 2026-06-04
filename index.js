@@ -1,5 +1,6 @@
 const { Client, Collection, Events, GatewayIntentBits, MessageFlags } = require('discord.js');
 const { loadCommands } = require('./src/loadCommands');
+const { loadEvents }   = require('./src/loadEvents');
 const { deployCommands } = require('./src/deployCommands');
 const { ping: pingDb } = require('./src/db');
 const { ensureSchema } = require('./src/schema');
@@ -23,8 +24,16 @@ for (const [key, value] of Object.entries(required)) {
   }
 }
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.AutoModerationConfiguration,
+    GatewayIntentBits.AutoModerationExecution,
+  ],
+});
 client.commands = new Collection(loadCommands());
+const _evtCount = loadEvents(client);
+console.log(`[startup] Registered ${_evtCount} event handler(s)`);
 
 client.once(Events.ClientReady, (c) => {
   console.log(`Logged in as ${c.user.tag} (${client.commands.size} command(s) loaded)`);
