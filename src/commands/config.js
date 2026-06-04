@@ -113,6 +113,31 @@ module.exports = {
           sub.setName('set-warn-decay').setDescription('Setzt die Zeit in Tagen, nach der Verwarnungen verfallen.')
             .addIntegerOption((o) => o.setName('days').setDescription('Tage bis zum Verfall (0 = deaktiviert)').setRequired(true).setMinValue(0).setMaxValue(365))
         )
+        .addSubcommand((sub) =>
+          sub.setName('set-captcha').setDescription('Aktiviert/deaktiviert die Captcha-Verifizierung bei Beitritt.')
+            .addBooleanOption((o) => o.setName('enabled').setDescription('Aktiviert?').setRequired(true))
+            .addRoleOption((o) => o.setName('role').setDescription('Rolle, die nach Verifizierung vergeben wird').setRequired(false))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('set-toxicity').setDescription('Aktiviert/deaktiviert den Toxizitäts-Filter.')
+            .addBooleanOption((o) => o.setName('enabled').setDescription('Aktiviert?').setRequired(true))
+            .addStringOption((o) => o.setName('action').setDescription('Sanktion bei Verstoß').setRequired(false).addChoices(
+              { name: 'delete', value: 'delete' },
+              { name: 'warn', value: 'warn' },
+              { name: 'mute', value: 'mute' }
+            ))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('add-bad-word').setDescription('Fügt ein Wort zur Blacklist des Toxizitäts-Filters hinzu.')
+            .addStringOption((o) => o.setName('word').setDescription('Das verbotene Wort').setRequired(true))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('remove-bad-word').setDescription('Entfernt ein Wort von der Blacklist des Toxizitäts-Filters.')
+            .addStringOption((o) => o.setName('word').setDescription('Das verbotene Wort').setRequired(true))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('list-bad-words').setDescription('Listet alle blockierten Wörter des Toxizitäts-Filters auf.')
+        )
     )
     .addSubcommand((sub) =>
       sub.setName('show').setDescription('Zeigt die komplette Server-Konfiguration.')
@@ -149,6 +174,11 @@ module.exports = {
     if (group === 'security') {
       if (sub === 'set-age') return handleSecuritySetAge(interaction);
       if (sub === 'set-warn-decay') return handleSecuritySetWarnDecay(interaction);
+      if (sub === 'set-captcha') return handleSecuritySetCaptcha(interaction);
+      if (sub === 'set-toxicity') return handleSecuritySetToxicity(interaction);
+      if (sub === 'add-bad-word') return handleSecurityAddBadWord(interaction);
+      if (sub === 'remove-bad-word') return handleSecurityRemoveBadWord(interaction);
+      if (sub === 'list-bad-words') return handleSecurityListBadWords(interaction);
     }
 
     if (group === null && sub === 'show') {
@@ -724,6 +754,132 @@ async function handleSecuritySetWarnDecay(interaction) {
   return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
 }
 
+async function handleSecuritySetCaptcha(interaction) {
+  const enabled = interaction.options.getBoolean('enabled');
+  const role = interaction.options.getRole('role');
+  const config = require('../config');
+
+  try {
+    const pool = getPool();
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await config.setCaptchaEnabled(interaction.guildId, enabled);
+    if (role) {
+      await config.setVerifiedRoleId(interaction.guildId, role.id);
+    }
+  } catch (err) {
+    console.error('/config security set-captcha DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const roleText = role ? ` mit Rolle <@&${role.id}>` : '';
+  const message = enabled
+    ? `✅ Captcha-Verifizierung bei Server-Beitritt **aktiviert**${roleText}.`
+    : '✅ Captcha-Verifizierung **deaktiviert**.';
+  return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+}
+
+async function handleSecuritySetToxicity(interaction) {
+  const enabled = interaction.options.getBoolean('enabled');
+  const action = interaction.options.getString('action');
+  const config = require('../config');
+
+  try {
+    const pool = getPool();
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await config.setToxicityEnabled(interaction.guildId, enabled);
+    if (action) {
+      await config.setToxicityAction(interaction.guildId, action);
+    }
+  } catch (err) {
+    console.error('/config security set-toxicity DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const act = action || 'warn';
+  const message = enabled
+    ? `✅ Anti-Toxizitäts-Filter **aktiviert** (Aktion bei Verstoß: **${act}**).`
+    : '✅ Anti-Toxizitäts-Filter **deaktiviert**.';
+  return interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+}
+
+async function handleSecurityAddBadWord(interaction) {
+  const word = interaction.options.getString('word');
+  const config = require('../config');
+
+  try {
+    const pool = getPool();
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await config.addBadWord(interaction.guildId, word);
+  } catch (err) {
+    console.error('/config security add-bad-word DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Wort \`${word.toLowerCase()}\` zur Toxizitäts-Blacklist hinzugefügt.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleSecurityRemoveBadWord(interaction) {
+  const word = interaction.options.getString('word');
+  const config = require('../config');
+
+  try {
+    await config.removeBadWord(interaction.guildId, word);
+  } catch (err) {
+    console.error('/config security remove-bad-word DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Wort \`${word.toLowerCase()}\` von der Toxizitäts-Blacklist entfernt.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleSecurityListBadWords(interaction) {
+  const config = require('../config');
+  let words = [];
+
+  try {
+    words = await config.getBadWords(interaction.guildId);
+  } catch (err) {
+    console.error('/config security list-bad-words DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (words.length === 0) {
+    return interaction.reply({
+      content: 'Die Blacklist ist aktuell leer. Verwende `/config security add-bad-word word:<text>` um Wörter hinzuzufügen.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle('📝 Toxizitäts-Filter Blacklist')
+    .setColor(0x5865f2)
+    .setDescription(words.map((w) => `• \`${w}\``).join('\n'))
+    .setFooter({ text: `Insgesamt ${words.length} Wort/Wörter | 🐾 Oreo` });
+
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
 async function handleShow(interaction) {
   let guildRow;
   let roleRows;
@@ -769,6 +925,16 @@ async function handleShow(interaction) {
   const warnDecayLine = warnDecay > 0 ? `${warnDecay} Tage` : '❌ inaktiv';
   const mutedRoleId = guildRow?.muted_role_id ? String(guildRow.muted_role_id) : null;
   const mutedRoleLine = mutedRoleId ? `<@&${mutedRoleId}>` : '(nicht konfiguriert)';
+  const captchaOn = Boolean(guildRow?.captcha_enabled);
+  const verifiedRoleId = guildRow?.verified_role_id ? String(guildRow.verified_role_id) : null;
+  const captchaEnabledLine = captchaOn
+    ? `✅ aktiv (Rolle: ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '(keine Rolle)'})`
+    : '❌ deaktiviert';
+  const toxicityOn = Boolean(guildRow?.toxicity_enabled);
+  const toxicityActionText = guildRow?.toxicity_action ?? 'warn';
+  const toxicityEnabledLine = toxicityOn
+    ? `✅ aktiv (Aktion: **${toxicityActionText}**)`
+    : '❌ deaktiviert';
 
   // Stats — next_case_number stores the LAST assigned (atomic LAST_INSERT_ID pattern in cases.js).
   // Next-to-assign = stored + 1. If no row exists yet, the first case will be #1.
@@ -810,7 +976,7 @@ async function handleShow(interaction) {
     .setColor(0x5865f2)
     .addFields(
       { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}`, inline: false },
-      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}`,   inline: false },
+      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}`,   inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
       { name: '🔐 Rollen-Tiers', value: rolesValue,                                       inline: false },

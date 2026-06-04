@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -99,6 +99,112 @@ async function setMutedRoleId(guildId, roleId) {
   );
 }
 
+/**
+ * Liefert ob die Captcha-Verifizierung aktiviert ist.
+ */
+async function getCaptchaEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.captcha_enabled);
+}
+
+/**
+ * Setzt ob die Captcha-Verifizierung aktiviert ist.
+ */
+async function setCaptchaEnabled(guildId, enabled) {
+  await getPool().execute(
+    'UPDATE guilds SET captcha_enabled = ? WHERE guild_id = ?',
+    [enabled ? 1 : 0, guildId]
+  );
+}
+
+/**
+ * Liefert die verifizierte Rolle.
+ */
+async function getVerifiedRoleId(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.verified_role_id ? String(row.verified_role_id) : null;
+}
+
+/**
+ * Setzt die verifizierte Rolle.
+ */
+async function setVerifiedRoleId(guildId, roleId) {
+  await getPool().execute(
+    'UPDATE guilds SET verified_role_id = ? WHERE guild_id = ?',
+    [roleId || null, guildId]
+  );
+}
+
+/**
+ * Liefert ob der Toxizitätsfilter aktiviert ist.
+ */
+async function getToxicityEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.toxicity_enabled);
+}
+
+/**
+ * Setzt ob der Toxizitätsfilter aktiviert ist.
+ */
+async function setToxicityEnabled(guildId, enabled) {
+  await getPool().execute(
+    'UPDATE guilds SET toxicity_enabled = ? WHERE guild_id = ?',
+    [enabled ? 1 : 0, guildId]
+  );
+}
+
+/**
+ * Liefert die Toxizitäts-Aktion ('delete', 'warn', 'mute').
+ */
+async function getToxicityAction(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.toxicity_action ?? 'warn';
+}
+
+/**
+ * Setzt die Toxizitäts-Aktion.
+ */
+async function setToxicityAction(guildId, action) {
+  await getPool().execute(
+    'UPDATE guilds SET toxicity_action = ? WHERE guild_id = ?',
+    [action, guildId]
+  );
+}
+
+/**
+ * Liefert die Liste aller Bad Words einer Guild.
+ */
+async function getBadWords(guildId) {
+  const [rows] = await getPool().execute(
+    'SELECT word FROM bad_words WHERE guild_id = ? ORDER BY word ASC',
+    [guildId]
+  );
+  return rows.map((r) => r.word);
+}
+
+/**
+ * Fügt ein Bad Word hinzu (idempotent).
+ */
+async function addBadWord(guildId, word) {
+  const cleanWord = word.trim().toLowerCase();
+  if (!cleanWord) return;
+  await getPool().execute(
+    'INSERT IGNORE INTO bad_words (guild_id, word) VALUES (?, ?)',
+    [guildId, cleanWord]
+  );
+}
+
+/**
+ * Entfernt ein Bad Word.
+ */
+async function removeBadWord(guildId, word) {
+  const cleanWord = word.trim().toLowerCase();
+  await getPool().execute(
+    'DELETE FROM bad_words WHERE guild_id = ? AND word = ?',
+    [guildId, cleanWord]
+  );
+}
+
 module.exports = {
   getModLogChannelId,
   getReportChannelId,
@@ -108,4 +214,16 @@ module.exports = {
   getMutedRoleId,
   setMutedRoleId,
   isAutomodEnabled,
+  getCaptchaEnabled,
+  setCaptchaEnabled,
+  getVerifiedRoleId,
+  setVerifiedRoleId,
+  getToxicityEnabled,
+  setToxicityEnabled,
+  getToxicityAction,
+  setToxicityAction,
+  getBadWords,
+  addBadWord,
+  removeBadWord,
 };
+

@@ -7,6 +7,7 @@ const { ensureSchema } = require('./src/schema');
 const perms = require('./src/perms');
 const reportInteractions = require('./src/interactions/report');
 const announcementInteractions = require('./src/interactions/announcement');
+const captchaInteractions = require('./src/interactions/captcha');
 
 const {
   DISCORD_TOKEN, CLIENT_ID, GUILD_ID,
@@ -100,7 +101,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
     try {
       const handled = await reportInteractions.dispatch(interaction)
-                   || await announcementInteractions.dispatch(interaction);
+                   || await announcementInteractions.dispatch(interaction)
+                   || await captchaInteractions.dispatch(interaction);
       if (!handled) {
         await interaction.reply({ content: 'Unbekannte Interaktion.', flags: MessageFlags.Ephemeral }).catch(() => {});
       }

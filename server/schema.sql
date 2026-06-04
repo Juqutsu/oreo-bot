@@ -227,5 +227,21 @@ ALTER TABLE infractions MODIFY COLUMN type
 ALTER TABLE infractions MODIFY COLUMN source
   ENUM('manual','automod','api','escalation','system') NOT NULL DEFAULT 'manual';
 
+-- ============================================================
+-- Stage 11 Migration: Captcha Verification & Toxicity Filter
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN captcha_enabled TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE guilds ADD COLUMN verified_role_id BIGINT UNSIGNED NULL;
+ALTER TABLE guilds ADD COLUMN toxicity_enabled TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE guilds ADD COLUMN toxicity_action ENUM('delete', 'warn', 'mute') NOT NULL DEFAULT 'warn';
+
+CREATE TABLE IF NOT EXISTS bad_words (
+  guild_id BIGINT UNSIGNED NOT NULL,
+  word VARCHAR(64) NOT NULL,
+  PRIMARY KEY (guild_id, word),
+  FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+);
+
+
 
 
