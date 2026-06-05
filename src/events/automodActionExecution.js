@@ -15,7 +15,26 @@ function truncate(str, max) {
 }
 
 function buildReason(filterKey, matched, channelMention) {
-  const raw = `[AutoMod: ${filterKey}] match="${truncate(matched, TRUNC_MATCHED)}" in ${channelMention}`;
+  let raw;
+  switch (filterKey) {
+    case 'spam':
+      raw = `Spam-Erkennung in ${channelMention}`;
+      break;
+    case 'mention_spam':
+      raw = `Massen-Erwähnungsschutz in ${channelMention}`;
+      break;
+    case 'invite_links':
+      raw = `Einladungslink blockiert: "${truncate(matched, TRUNC_MATCHED)}" in ${channelMention}`;
+      break;
+    case 'keyword_preset':
+      raw = `Wortfilter (Preset-Filter) in ${channelMention}`;
+      break;
+    case 'custom_wordlist':
+      raw = `Wortfilter (Schwarze Liste): "${truncate(matched, TRUNC_MATCHED)}" in ${channelMention}`;
+      break;
+    default:
+      raw = `AutoMod-Treffer [${filterKey}] in ${channelMention}`;
+  }
   return truncate(raw, TRUNC_REASON);
 }
 
