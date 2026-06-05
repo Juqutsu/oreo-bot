@@ -15,6 +15,7 @@ const CHANNEL_TYPE_CHOICES = [
   { name: 'report', value: 'report' },
   { name: 'modlog', value: 'modlog' },
   { name: 'msglog', value: 'msglog' },
+  { name: 'serverlog', value: 'serverlog' },
 ];
 
 // type → DB-Spalte
@@ -22,6 +23,7 @@ const CHANNEL_COLUMN = {
   report: 'report_channel_id',
   modlog: 'mod_log_channel_id',
   msglog: 'msg_log_channel_id',
+  serverlog: 'server_log_channel_id',
 };
 
 // type → User-facing Label
@@ -29,15 +31,26 @@ const CHANNEL_LABEL = {
   report: 'report',
   modlog: 'modlog',
   msglog: 'msglog',
+  serverlog: 'serverlog',
 };
 
 const FEATURE_CHOICES = [
   { name: 'automod', value: 'automod' },
+  { name: 'log_profile', value: 'log_profile' },
+  { name: 'log_join_leave', value: 'log_join_leave' },
+  { name: 'log_voice', value: 'log_voice' },
+  { name: 'log_invite', value: 'log_invite' },
+  { name: 'log_roles', value: 'log_roles' },
 ];
 
 // feature → DB-Spalte
 const FEATURE_COLUMN = {
   automod: 'automod_enabled',
+  log_profile: 'log_profile_enabled',
+  log_join_leave: 'log_join_leave_enabled',
+  log_voice: 'log_voice_enabled',
+  log_invite: 'log_invite_enabled',
+  log_roles: 'log_roles_enabled',
 };
 
 module.exports = {
@@ -519,7 +532,7 @@ async function handleChannelList(interaction) {
   let row;
   try {
     const [rows] = await getPool().execute(
-      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id FROM guilds WHERE guild_id = ?',
+      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id FROM guilds WHERE guild_id = ?',
       [interaction.guildId],
     );
     row = rows[0] ?? null;
@@ -535,6 +548,7 @@ async function handleChannelList(interaction) {
   const modlogDbId = row?.mod_log_channel_id ? String(row.mod_log_channel_id) : null;
   const modlogEnvId = !modlogDbId && process.env.MODLOG_CHANNEL_ID ? process.env.MODLOG_CHANNEL_ID : null;
   const msglogId = row?.msg_log_channel_id ? String(row.msg_log_channel_id) : null;
+  const serverlogId = row?.server_log_channel_id ? String(row.server_log_channel_id) : null;
 
   const reportLine = reportId ? `<#${reportId}>` : '(nicht konfiguriert)';
   let modlogLine;
@@ -542,6 +556,7 @@ async function handleChannelList(interaction) {
   else if (modlogEnvId) modlogLine = `<#${modlogEnvId}> *(env-Fallback)*`;
   else modlogLine = '(nicht konfiguriert)';
   const msglogLine = msglogId ? `<#${msglogId}>` : '(nicht konfiguriert)';
+  const serverlogLine = serverlogId ? `<#${serverlogId}>` : '(nicht konfiguriert)';
 
   const embed = new EmbedBuilder()
     .setTitle('🔧 Channel-Konfiguration')
@@ -550,6 +565,7 @@ async function handleChannelList(interaction) {
       { name: 'Report-Channel',  value: reportLine, inline: false },
       { name: 'Mod-Log-Channel', value: modlogLine, inline: false },
       { name: 'Message-Log-Channel', value: msglogLine, inline: false },
+      { name: 'Server-Log-Channel', value: serverlogLine, inline: false },
     )
     .setFooter({ text: '🐾 Oreo' });
 
@@ -1023,7 +1039,7 @@ async function handleShow(interaction) {
   try {
     const pool = getPool();
     const [gRows] = await pool.execute(
-      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, next_case_number FROM guilds WHERE guild_id = ?',
+      'SELECT * FROM guilds WHERE guild_id = ?',
       [interaction.guildId],
     );
     guildRow = gRows[0] ?? null;
@@ -1045,6 +1061,7 @@ async function handleShow(interaction) {
   const modlogDbId = guildRow?.mod_log_channel_id ? String(guildRow.mod_log_channel_id) : null;
   const modlogEnvId = !modlogDbId && process.env.MODLOG_CHANNEL_ID ? process.env.MODLOG_CHANNEL_ID : null;
   const msglogId = guildRow?.msg_log_channel_id ? String(guildRow.msg_log_channel_id) : null;
+  const serverlogId = guildRow?.server_log_channel_id ? String(guildRow.server_log_channel_id) : null;
 
   const reportLine = reportId ? `<#${reportId}>` : '(nicht konfiguriert)';
   let modlogLine;
@@ -1052,6 +1069,7 @@ async function handleShow(interaction) {
   else if (modlogEnvId) modlogLine = `<#${modlogEnvId}> *(env-Fallback)*`;
   else modlogLine = '(nicht konfiguriert)';
   const msglogLine = msglogId ? `<#${msglogId}>` : '(nicht konfiguriert)';
+  const serverlogLine = serverlogId ? `<#${serverlogId}>` : '(nicht konfiguriert)';
 
   // Features
   const automodOn = Boolean(guildRow?.automod_enabled);
@@ -1072,6 +1090,14 @@ async function handleShow(interaction) {
   const toxicityEnabledLine = toxicityOn
     ? `✅ aktiv (Aktion: **${toxicityActionText}**)`
     : '❌ deaktiviert';
+
+  // Server Log Toggles
+  const logProfileOn = Boolean(guildRow?.log_profile_enabled);
+  const logJoinLeaveOn = Boolean(guildRow?.log_join_leave_enabled);
+  const logVoiceOn = Boolean(guildRow?.log_voice_enabled);
+  const logInviteOn = Boolean(guildRow?.log_invite_enabled);
+  const logRolesOn = Boolean(guildRow?.log_roles_enabled);
+  const serverLogToggles = `Profile: ${logProfileOn ? '✅' : '❌'} | Joins/Leaves: ${logJoinLeaveOn ? '✅' : '❌'} | Voice: ${logVoiceOn ? '✅' : '❌'} | Invites: ${logInviteOn ? '✅' : '❌'} | Roles: ${logRolesOn ? '✅' : '❌'}`;
 
   // Stats — next_case_number stores the LAST assigned (atomic LAST_INSERT_ID pattern in cases.js).
   // Next-to-assign = stored + 1. If no row exists yet, the first case will be #1.
@@ -1112,8 +1138,9 @@ async function handleShow(interaction) {
     .setTitle('🛡️ Server-Konfiguration')
     .setColor(0x5865f2)
     .addFields(
-      { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}`, inline: false },
+      { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}\nServer-Log: ${serverlogLine}`, inline: false },
       { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}`,   inline: false },
+      { name: '📁 Server-Logs',  value: serverLogToggles, inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
       { name: '🔐 Rollen-Tiers', value: rolesValue,                                       inline: false },

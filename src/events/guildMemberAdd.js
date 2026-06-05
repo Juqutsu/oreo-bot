@@ -136,6 +136,66 @@ async function execute(member) {
   } catch (err) {
     console.error('[captcha-verification] failed to initiate verification channel:', err);
   }
+
+  // Server-Log: Join
+  try {
+    const isJoinLeaveEnabled = await config.isLogJoinLeaveEnabled(guildId);
+    if (isJoinLeaveEnabled) {
+      const serverLogChannelId = await config.getServerLogChannelId(guildId);
+      if (serverLogChannelId) {
+        const logChannel = await member.guild.channels.fetch(serverLogChannelId).catch(() => null);
+        if (logChannel) {
+          const createdSec = Math.floor(member.user.createdAt.getTime() / 1000);
+          const embed = new EmbedBuilder()
+            .setTitle('📥 Member beigetreten')
+            .setColor(0x2ecc71)
+            .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+            .addFields(
+              { name: '👤 User', value: `<@${member.user.id}> (${member.user.tag})`, inline: true },
+              { name: '🆔 User-ID', value: member.user.id, inline: true },
+              { name: '⏳ Registriert am', value: `<t:${createdSec}:F> (<t:${createdSec}:R>)`, inline: false }
+            )
+            .setTimestamp();
+          await logChannel.send({ embeds: [embed] }).catch(() => null);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[join-log] failed to log member join:', err);
+  }
+
+  // Server-Log: Invite Tracking
+  try {
+    const isInviteEnabled = await config.isLogInviteEnabled(guildId);
+    if (isInviteEnabled) {
+      const serverLogChannelId = await config.getServerLogChannelId(guildId);
+      if (serverLogChannelId) {
+        const logChannel = await member.guild.channels.fetch(serverLogChannelId).catch(() => null);
+        if (logChannel) {
+          const invitesTracker = require('../invites');
+          const usedInvite = await invitesTracker.findUsedInvite(member.guild);
+          
+          let inviteInfo = 'Unbekannt (z.B. per Vanity-URL oder Bot-Invite)';
+          if (usedInvite) {
+            inviteInfo = `Code: \`${usedInvite.code}\` (Erstellt von <@${usedInvite.inviterId}>, Verwendungen: **${usedInvite.uses}**)`;
+          }
+          
+          const embed = new EmbedBuilder()
+            .setTitle('🎫 Einladungs-Tracking')
+            .setColor(0xe91e63)
+            .addFields(
+              { name: '👤 User', value: `<@${member.user.id}> (${member.user.tag})`, inline: true },
+              { name: '🆔 User-ID', value: member.user.id, inline: true },
+              { name: '🔗 Einladung verwendet', value: inviteInfo, inline: false }
+            )
+            .setTimestamp();
+          await logChannel.send({ embeds: [embed] }).catch(() => null);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[invite-log] failed to track member join invite:', err);
+  }
 }
 
 module.exports = {

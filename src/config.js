@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -223,10 +223,59 @@ async function setCaptchaChannelId(guildId, channelId) {
   );
 }
 
+/**
+ * Liefert die server-log-channel-ID. Kein env-Fallback.
+ */
+async function getServerLogChannelId(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.server_log_channel_id ? String(row.server_log_channel_id) : null;
+}
+
+/**
+ * Liefert ob das Profil-Logging aktiviert ist.
+ */
+async function isLogProfileEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.log_profile_enabled);
+}
+
+/**
+ * Liefert ob das Beitritts/Verlassens-Logging aktiviert ist.
+ */
+async function isLogJoinLeaveEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.log_join_leave_enabled);
+}
+
+/**
+ * Liefert ob das Voice-Logging aktiviert ist.
+ */
+async function isLogVoiceEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.log_voice_enabled);
+}
+
+/**
+ * Liefert ob das Einladungs-Logging aktiviert ist.
+ */
+async function isLogInviteEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.log_invite_enabled);
+}
+
+/**
+ * Liefert ob das Rollen-Logging aktiviert ist.
+ */
+async function isLogRolesEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.log_roles_enabled);
+}
+
 module.exports = {
   getModLogChannelId,
   getReportChannelId,
   getMsgLogChannelId,
+  getServerLogChannelId,
   getMinAccountAgeDays,
   getWarnDecayDays,
   getMutedRoleId,
@@ -245,5 +294,10 @@ module.exports = {
   removeBadWord,
   getCaptchaChannelId,
   setCaptchaChannelId,
+  isLogProfileEnabled,
+  isLogJoinLeaveEnabled,
+  isLogVoiceEnabled,
+  isLogInviteEnabled,
+  isLogRolesEnabled,
 };
 

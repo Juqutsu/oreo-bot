@@ -33,6 +33,8 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildInvites,
   ],
   partials: [Partials.Message],
 });
@@ -42,8 +44,19 @@ console.log(`[startup] Registered ${_evtCount} event handler(s)`);
 
 const { startBackgroundTasks } = require('./src/background');
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag} (${client.commands.size} command(s) loaded)`);
+  
+  try {
+    const invitesTracker = require('./src/invites');
+    for (const guild of c.guilds.cache.values()) {
+      await invitesTracker.cacheGuildInvites(guild);
+    }
+    console.log(`[startup] Cached invites for ${c.guilds.cache.size} guild(s)`);
+  } catch (err) {
+    console.error('Failed to cache invites on startup:', err);
+  }
+
   startBackgroundTasks(client);
 });
 

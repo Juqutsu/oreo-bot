@@ -16,12 +16,15 @@ async function main() {
   // Ensure guild row exists with configured modlog and min_account_age_days
   async function configureGuild(minDays) {
     await pool.query(
-      `INSERT INTO guilds (guild_id, mod_log_channel_id, min_account_age_days, captcha_enabled)
-       VALUES (?, ?, ?, 0)
+      `INSERT INTO guilds (guild_id, mod_log_channel_id, min_account_age_days, captcha_enabled, server_log_channel_id, log_join_leave_enabled, log_invite_enabled)
+       VALUES (?, ?, ?, 0, NULL, 0, 0)
        ON DUPLICATE KEY UPDATE 
          mod_log_channel_id = VALUES(mod_log_channel_id),
          min_account_age_days = VALUES(min_account_age_days),
-         captcha_enabled = 0`,
+         captcha_enabled = 0,
+         server_log_channel_id = NULL,
+         log_join_leave_enabled = 0,
+         log_invite_enabled = 0`,
       [GUILD_ID, MODLOG_CHANNEL_ID, minDays]
     );
   }

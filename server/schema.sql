@@ -252,3 +252,13 @@ ALTER TABLE infractions ADD INDEX idx_active_type_created (active, type, created
 -- Stage 13 Migration: Global Captcha Verification Channel
 -- ============================================================
 ALTER TABLE guilds ADD COLUMN captcha_channel_id BIGINT UNSIGNED NULL;
+
+-- ============================================================
+-- Stage 14 Migration: Extended Server Logs & Toggles
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN server_log_channel_id BIGINT UNSIGNED NULL AFTER msg_log_channel_id;
+ALTER TABLE guilds ADD COLUMN log_profile_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER captcha_channel_id;
+ALTER TABLE guilds ADD COLUMN log_join_leave_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_profile_enabled;
+ALTER TABLE guilds ADD COLUMN log_voice_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_join_leave_enabled;
+ALTER TABLE guilds ADD COLUMN log_invite_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_voice_enabled;
+ALTER TABLE guilds ADD COLUMN log_roles_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_invite_enabled;
