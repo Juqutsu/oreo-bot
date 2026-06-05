@@ -21,7 +21,6 @@ const {
 const data = new SlashCommandBuilder()
   .setName('automod')
   .setDescription('Configure Oreo AutoMod (admin-only).')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addSubcommand((sc) => sc
     .setName('status')

@@ -44,7 +44,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('config')
     .setDescription('Konfiguration des Bots für diesen Server.')
-    .setDefaultMemberPermissions(0)
     .addSubcommandGroup((group) =>
       group.setName('role').setDescription('Rollen-Tier-Verwaltung')
         .addSubcommand((sub) =>

