@@ -134,6 +134,15 @@ function explain(err) {
 function explainDiscord(err) {
   if (err?.code === 50013) return '❌ Mir fehlt die Berechtigung *Manage Guild*. Gib mir die Rolle und versuch\'s nochmal.';
   if (err?.code === 429 || err?.httpStatus === 429) return '⏳ Discord limitiert gerade AutoMod-Edits, bitte ~30 Sek warten.';
+  if (err?.message && err.message.includes('AUTO_MODERATION_MAX_RULES_OF_TYPE_EXCEEDED')) {
+    if (err.message.includes('type 3')) {
+      return '❌ Es existiert bereits eine **Spam-Schutz-Regel** auf diesem Server. Discord erlaubt maximal eine Spam-Regel pro Server. Bitte lösche die bestehende Spam-Regel in den Server-Einstellungen (unter AutoMod) und versuche es erneut.';
+    }
+    if (err.message.includes('type 5')) {
+      return '❌ Es existiert bereits eine **Erwähnungs-Spam-Regel** auf diesem Server. Discord erlaubt maximal eine Erwähnungs-Spam-Regel pro Server. Bitte lösche die bestehende Erwähnungs-Spam-Regel in den Server-Einstellungen und versuche es erneut.';
+    }
+    return '❌ Das Discord-Limit für diesen AutoMod-Regeltyp wurde überschritten. Bitte lösche eine bestehende Regel dieses Typs in den Server-Einstellungen.';
+  }
   return null;
 }
 
