@@ -148,7 +148,6 @@ async function ephemeralReply(interaction, content) {
 // ---- Subcommand: status ----
 
 async function doStatus(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const rows = await automod.getAllRuleStates(interaction.guildId);
   const byKey = new Map(rows.map((r) => [r.filter_key, r]));
   const lines = ['```',
@@ -185,7 +184,6 @@ async function doStatus(interaction) {
 
 async function doEnable(interaction) {
   const filterKey = interaction.options.getString('filter', true);
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const existing = await automod.getRuleState(interaction.guildId, filterKey);
 
@@ -234,7 +232,6 @@ async function doEnable(interaction) {
 
 async function doDisable(interaction) {
   const filterKey = interaction.options.getString('filter', true);
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const state = await automod.getRuleState(interaction.guildId, filterKey);
   if (!state || !state.enabled) {
@@ -252,7 +249,6 @@ async function doDisable(interaction) {
 
 async function doThreshold(interaction) {
   const count = interaction.options.getInteger('count', true);
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   await automod.upsertRuleState(interaction.guildId, 'mention_spam', { threshold: count });
 
@@ -274,7 +270,6 @@ async function doThreshold(interaction) {
 async function doPreset(interaction) {
   const bucket = interaction.options.getString('bucket', true);
   const on     = interaction.options.getBoolean('on',     true);
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const state = await automod.getRuleState(interaction.guildId, 'keyword_preset');
   const current = state?.preset_flags ?? PRESET_FLAGS_ALL;
@@ -302,7 +297,6 @@ async function doPreset(interaction) {
 // ---- Subcommand-group: wordlist ----
 
 async function doWordlistAdd(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const word = interaction.options.getString('word', true);
   const stored = await automod.addWord(interaction.guildId, word, interaction.user.id);
 
@@ -321,7 +315,6 @@ async function doWordlistAdd(interaction) {
 }
 
 async function doWordlistRemove(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const word = interaction.options.getString('word', true);
   const removed = await automod.removeWord(interaction.guildId, word);
 
@@ -346,7 +339,6 @@ async function doWordlistRemove(interaction) {
 }
 
 async function doWordlistList(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const words = await automod.getWordlist(interaction.guildId);
   if (words.length === 0) return interaction.editReply('*(Wordlist leer.)*');
   const chunks = [];
@@ -389,7 +381,6 @@ async function pushExemptsToAllEnabled(interaction) {
 }
 
 async function doExemptAdd(interaction, targetType) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const option = targetType === 'role'
     ? interaction.options.getRole('role',    true)
     : interaction.options.getChannel('channel', true);
@@ -402,7 +393,6 @@ async function doExemptAdd(interaction, targetType) {
 }
 
 async function doExemptRemove(interaction, targetType) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const option = targetType === 'role'
     ? interaction.options.getRole('role',    true)
     : interaction.options.getChannel('channel', true);
@@ -415,7 +405,6 @@ async function doExemptRemove(interaction, targetType) {
 }
 
 async function doExemptList(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const tierRoles  = await automod.getTierRoleIds(interaction.guildId, ['owner', 'moderator']);
   const extraRoles = await automod.getExtraExemptIds(interaction.guildId, 'role');
   const extraChans = await automod.getExtraExemptIds(interaction.guildId, 'channel');
@@ -429,7 +418,6 @@ async function doExemptList(interaction) {
 // ---- Subcommand: resync ----
 
 async function doResync(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const { patched, dropped } = await pushExemptsToAllEnabled(interaction);
   if (patched === 0 && dropped === 0) {
     return interaction.editReply('ℹ️ Keine enabled Filter zu syncen.');
