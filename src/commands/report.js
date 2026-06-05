@@ -16,8 +16,8 @@ function buildOpenEmbed(reportId, reporter, target, reason, evidenceUrl, created
     .setColor(COLOR_OPEN)
     .setTitle(`🆕 Report #${reportId}`)
     .addFields(
-      { name: 'Gemeldeter User', value: `${target} (${target.id})`, inline: true },
-      { name: 'Reporter', value: `${reporter} (${reporter.id})`, inline: true },
+      { name: 'Gemeldeter User', value: `${target}`, inline: true },
+      { name: 'Reporter', value: `${reporter}`, inline: true },
       { name: 'Grund', value: reason },
     );
   if (evidenceUrl) {
