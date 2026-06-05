@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -271,6 +271,14 @@ async function isLogRolesEnabled(guildId) {
   return Boolean(row?.log_roles_enabled);
 }
 
+/**
+ * Liefert ob das Nachrichten-Logging aktiviert ist.
+ */
+async function isLogMessagesEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.log_messages_enabled);
+}
+
 module.exports = {
   getModLogChannelId,
   getReportChannelId,
@@ -299,5 +307,6 @@ module.exports = {
   isLogVoiceEnabled,
   isLogInviteEnabled,
   isLogRolesEnabled,
+  isLogMessagesEnabled,
 };
 

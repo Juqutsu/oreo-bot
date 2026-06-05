@@ -10,6 +10,9 @@ async function execute(oldMessage, newMessage) {
   if (oldMessage.content === newMessage.content) return;
 
   try {
+    const isMessagesEnabled = await config.isLogMessagesEnabled(newMessage.guild.id);
+    if (!isMessagesEnabled) return;
+
     const channelId = await config.getMsgLogChannelId(newMessage.guild.id);
     if (!channelId) return;
 

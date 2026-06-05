@@ -41,6 +41,7 @@ const FEATURE_CHOICES = [
   { name: 'log_voice', value: 'log_voice' },
   { name: 'log_invite', value: 'log_invite' },
   { name: 'log_roles', value: 'log_roles' },
+  { name: 'log_messages', value: 'log_messages' },
 ];
 
 // feature → DB-Spalte
@@ -51,6 +52,7 @@ const FEATURE_COLUMN = {
   log_voice: 'log_voice_enabled',
   log_invite: 'log_invite_enabled',
   log_roles: 'log_roles_enabled',
+  log_messages: 'log_messages_enabled',
 };
 
 module.exports = {
@@ -1097,7 +1099,8 @@ async function handleShow(interaction) {
   const logVoiceOn = Boolean(guildRow?.log_voice_enabled);
   const logInviteOn = Boolean(guildRow?.log_invite_enabled);
   const logRolesOn = Boolean(guildRow?.log_roles_enabled);
-  const serverLogToggles = `Profile: ${logProfileOn ? '✅' : '❌'} | Joins/Leaves: ${logJoinLeaveOn ? '✅' : '❌'} | Voice: ${logVoiceOn ? '✅' : '❌'} | Invites: ${logInviteOn ? '✅' : '❌'} | Roles: ${logRolesOn ? '✅' : '❌'}`;
+  const logMessagesOn = Boolean(guildRow?.log_messages_enabled);
+  const serverLogToggles = `Profile: ${logProfileOn ? '✅' : '❌'} | Joins/Leaves: ${logJoinLeaveOn ? '✅' : '❌'} | Voice: ${logVoiceOn ? '✅' : '❌'} | Invites: ${logInviteOn ? '✅' : '❌'} | Roles: ${logRolesOn ? '✅' : '❌'} | Messages: ${logMessagesOn ? '✅' : '❌'}`;
 
   // Stats — next_case_number stores the LAST assigned (atomic LAST_INSERT_ID pattern in cases.js).
   // Next-to-assign = stored + 1. If no row exists yet, the first case will be #1.

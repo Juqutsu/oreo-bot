@@ -16,9 +16,11 @@ async function main() {
 
   // Ensure guild row exists and has a configured msg_log_channel_id
   await pool.query(
-    `INSERT INTO guilds (guild_id, msg_log_channel_id)
-     VALUES (?, ?)
-     ON DUPLICATE KEY UPDATE msg_log_channel_id = VALUES(msg_log_channel_id)`,
+    `INSERT INTO guilds (guild_id, msg_log_channel_id, log_messages_enabled)
+     VALUES (?, ?, 1)
+     ON DUPLICATE KEY UPDATE 
+       msg_log_channel_id = VALUES(msg_log_channel_id),
+       log_messages_enabled = 1`,
     [GUILD_ID, MSGLOG_CHANNEL_ID]
   );
 

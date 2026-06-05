@@ -7,6 +7,9 @@ async function execute(message) {
   if (message.author?.bot) return;
 
   try {
+    const isMessagesEnabled = await config.isLogMessagesEnabled(message.guild.id);
+    if (!isMessagesEnabled) return;
+
     const channelId = await config.getMsgLogChannelId(message.guild.id);
     if (!channelId) return;
 

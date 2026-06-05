@@ -25,7 +25,8 @@ async function main() {
       log_join_leave_enabled = 1,
       log_voice_enabled = 1,
       log_invite_enabled = 1,
-      log_roles_enabled = 1
+      log_roles_enabled = 1,
+      log_messages_enabled = 1
      WHERE guild_id = ?`,
     [SERVER_LOG_CHANNEL_ID, GUILD_ID]
   );
@@ -37,6 +38,7 @@ async function main() {
   assert.equal(await config.isLogVoiceEnabled(GUILD_ID), true);
   assert.equal(await config.isLogInviteEnabled(GUILD_ID), true);
   assert.equal(await config.isLogRolesEnabled(GUILD_ID), true);
+  assert.equal(await config.isLogMessagesEnabled(GUILD_ID), true);
   console.log('✓ Config getters verified');
 
   // Mock message logging channel

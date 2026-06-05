@@ -262,3 +262,9 @@ ALTER TABLE guilds ADD COLUMN log_join_leave_enabled TINYINT(1) NOT NULL DEFAULT
 ALTER TABLE guilds ADD COLUMN log_voice_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_join_leave_enabled;
 ALTER TABLE guilds ADD COLUMN log_invite_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_voice_enabled;
 ALTER TABLE guilds ADD COLUMN log_roles_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_invite_enabled;
+
+-- ============================================================
+-- Stage 15 Migration: Message Logs Toggle
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN log_messages_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_roles_enabled;
+
