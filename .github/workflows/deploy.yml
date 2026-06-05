@@ -8,6 +8,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root_test_pass
+          MYSQL_DATABASE: oreo_test
+          MYSQL_USER: oreo_test
+          MYSQL_PASSWORD: oreo_test_pass
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,6 +33,15 @@ jobs:
         run: npm ci
 
       - name: Run Smoke Tests
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: oreo_test
+          MYSQL_PASSWORD: oreo_test_pass
+          MYSQL_DATABASE: oreo_test
+          DISCORD_TOKEN: dummy_token_value_not_used
+          CLIENT_ID: 111111111111111111
+          GUILD_ID: 222222222222222222
         run: npm test
 
   deploy:
