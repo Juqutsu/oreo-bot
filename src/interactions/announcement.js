@@ -1,5 +1,6 @@
 const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const config = require('../config');
+const perms = require('../perms');
 
 async function dispatch(interaction) {
   if (!interaction.customId) return false;
@@ -14,6 +15,8 @@ async function dispatch(interaction) {
 }
 
 async function handleModalSubmit(interaction, parts) {
+  if (!(await perms.requireTier(interaction, 'moderator'))) return;
+
   // Expect parts = ['announcement', 'modal', '<channelId>', '<roleId|none>']
   if (parts.length !== 4) {
     return interaction.reply({

@@ -13,7 +13,8 @@ module.exports = {
   // Gate: Server-Owner-ID.
 
   async execute(interaction) {
-    if (interaction.user.id !== interaction.guild.ownerId && interaction.user.id !== '820239667873316874') {
+    const isDeveloper = process.env.DEVELOPER_ID && interaction.user.id === process.env.DEVELOPER_ID;
+    if (interaction.user.id !== interaction.guild.ownerId && !isDeveloper) {
       return interaction.reply({
         content: 'Nur der Server-Inhaber kann /setup ausführen.',
         flags: MessageFlags.Ephemeral,

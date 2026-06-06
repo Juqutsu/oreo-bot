@@ -279,6 +279,13 @@ async function handleModalResolve(interaction, reportId, action) {
   // Defer ephemeral — Discord requires a response within 3s; we do DB + Discord-API
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+  const requiredActionTier = (action === 'kick' || action === 'ban') ? 'owner' : 'moderator';
+  if (!(await perms.hasTier(interaction.guildId, interaction.member, requiredActionTier))) {
+    return interaction.editReply({
+      content: `❌ Du brauchst Tier '${requiredActionTier}' oder höher für diese Aktion.`,
+    });
+  }
+
   // 1. Parse modal fields per action
   const reason = action === 'none' ? null : interaction.fields.getTextInputValue('reason');
   const note   = action === 'none'
@@ -453,6 +460,12 @@ async function handleDismissOpenModal(interaction, reportId) {
 }
 async function handleModalDismiss(interaction, reportId) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  if (!(await perms.hasTier(interaction.guildId, interaction.member, 'moderator'))) {
+    return interaction.editReply({
+      content: `❌ Du brauchst Tier 'moderator' oder höher, um Reports zu verwerfen.`,
+    });
+  }
 
   const note = interaction.fields.getTextInputValue('resolution_note') || null;
 
