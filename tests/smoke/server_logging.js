@@ -1,6 +1,27 @@
 const assert = require('node:assert/strict');
+const { AuditLogEvent } = require('discord.js');
+
+// Mock DB pool before loading config to run without a live database
+const db = require('../../src/db');
+const mockPool = {
+  execute: async (sql, params) => {
+    return [[{
+      server_log_channel_id: '1509540775535579229',
+      log_profile_enabled: 1,
+      log_join_leave_enabled: 1,
+      log_voice_enabled: 1,
+      log_invite_enabled: 1,
+      log_roles_enabled: 1,
+      log_messages_enabled: 1
+    }]];
+  },
+  query: async (sql, params) => {
+    return [[]];
+  }
+};
+db.getPool = () => mockPool;
+
 const config = require('../../src/config');
-const { getPool } = require('../../src/db');
 
 // Events under test
 const guildMemberAdd = require('../../src/events/guildMemberAdd');
@@ -14,7 +35,7 @@ const SERVER_LOG_CHANNEL_ID = '1509540775535579229';
 async function main() {
   console.log('==== Server Logging & Configuration Smoke-Test ====');
 
-  const pool = getPool();
+  const pool = db.getPool();
 
   // Seed configuration in the DB
   await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [GUILD_ID]);
@@ -49,6 +70,8 @@ async function main() {
     }
   };
 
+  let mockAuditLogsResult = { entries: new Map() };
+
   const mockGuild = {
     id: GUILD_ID,
     roles: {
@@ -73,6 +96,23 @@ async function main() {
         assert.equal(id, SERVER_LOG_CHANNEL_ID);
         return mockLogChannel;
       }
+    },
+    fetchAuditLogs: async ({ type, limit }) => {
+      const filtered = new Map();
+      if (mockAuditLogsResult && mockAuditLogsResult.entries) {
+        for (const [id, entry] of mockAuditLogsResult.entries) {
+          if (type === AuditLogEvent.MemberUpdate && entry.actionType === 'update') {
+            filtered.set(id, entry);
+          } else if (type === AuditLogEvent.MemberRoleUpdate && entry.actionType === 'roles') {
+            filtered.set(id, entry);
+          } else if (type === AuditLogEvent.MemberDisconnect && entry.actionType === 'disconnect') {
+            filtered.set(id, entry);
+          } else if (type === AuditLogEvent.MemberMove && entry.actionType === 'move') {
+            filtered.set(id, entry);
+          }
+        }
+      }
+      return { entries: filtered };
     }
   };
 
@@ -123,7 +163,37 @@ async function main() {
   // 4. Test Nickname & Role Changes (guildMemberUpdate)
   {
     sentEmbeds = [];
-    
+
+    // Set up mock audit logs result for nickname and role change
+    mockAuditLogsResult = {
+      entries: new Map([
+        ['entry_nick', {
+          id: 'entry_nick',
+          actionType: 'update',
+          targetId: 'user_333',
+          createdTimestamp: Date.now(),
+          executor: {
+            id: 'moderator_nick_123',
+            tag: 'ModNick#1111'
+          },
+          changes: [
+            { key: 'nick', old: 'OldNick', new: 'NewNick' }
+          ]
+        }],
+        ['entry_roles', {
+          id: 'entry_roles',
+          actionType: 'roles',
+          targetId: 'user_333',
+          createdTimestamp: Date.now(),
+          executor: {
+            id: 'moderator_roles_456',
+            tag: 'ModRoles#2222'
+          },
+          changes: []
+        }]
+      ])
+    };
+
     const oldMember = {
       guild: mockGuild,
       nickname: 'OldNick',
@@ -135,7 +205,7 @@ async function main() {
         tag: 'updater#0003',
       }
     };
-    
+
     const newMember = {
       guild: mockGuild,
       nickname: 'NewNick',
@@ -156,17 +226,31 @@ async function main() {
     // We expect both nick change and role change logs
     const nickLog = sentEmbeds.find(e => e.toJSON().title === '👤 Nickname geändert');
     const roleLog = sentEmbeds.find(e => e.toJSON().title === '🛡️ Rollen geändert');
-    
+
     assert.ok(nickLog, 'Should log nickname change');
     assert.ok(roleLog, 'Should log role change');
-    assert.equal(nickLog.toJSON().fields[2].value, 'OldNick');
-    assert.equal(nickLog.toJSON().fields[3].value, 'NewNick');
+
+    const nickFields = nickLog.toJSON().fields;
+    const oldNickField = nickFields.find(f => f.name === 'Vorher');
+    const newNickField = nickFields.find(f => f.name === 'Nachher');
+    assert.ok(oldNickField, 'Nickname log should have a "Vorher" field');
+    assert.ok(newNickField, 'Nickname log should have a "Nachher" field');
+    assert.equal(oldNickField.value, 'OldNick');
+    assert.equal(newNickField.value, 'NewNick');
+
+    // Verify executor info
+    const hasNickExecutor = nickFields.some(f => f.name === '✍️ Geändert von' && f.value.includes('moderator_nick_123'));
+    assert.ok(hasNickExecutor, 'Nickname log should include executor');
+
+    const roleLogObj = roleLog.toJSON();
+    const hasRoleExecutor = roleLogObj.fields.some(f => f.name === '✍️ Geändert von' && f.value.includes('moderator_roles_456'));
+    assert.ok(hasRoleExecutor, 'Role log should include executor');
+
     console.log('✓ Profile & Role logs verified');
   }
 
   // 5. Test Voice State Update (voiceStateUpdate)
   {
-    sentEmbeds = [];
     const mockMember = {
       user: {
         id: 'user_444',
@@ -174,25 +258,111 @@ async function main() {
       }
     };
 
-    const oldState = {
-      guild: mockGuild,
-      member: mockMember,
-      channelId: null
-    };
+    // Case 5.1: Join
+    {
+      sentEmbeds = [];
+      const oldState = {
+        guild: mockGuild,
+        member: mockMember,
+        channelId: null
+      };
 
-    const newState = {
-      guild: mockGuild,
-      member: mockMember,
-      channelId: 'voice_channel_1'
-    };
+      const newState = {
+        guild: mockGuild,
+        member: mockMember,
+        channelId: 'voice_channel_1'
+      };
 
-    await voiceStateUpdate.execute(oldState, newState);
+      await voiceStateUpdate.execute(oldState, newState);
 
-    assert.equal(sentEmbeds.length, 1);
-    const log = sentEmbeds[0].toJSON();
-    assert.equal(log.title, '🔊 Voice-Kanal beigetreten');
-    assert.equal(log.fields[2].value.includes('voice_channel_1'), true);
-    console.log('✓ Voice join log verified');
+      assert.equal(sentEmbeds.length, 1);
+      const log = sentEmbeds[0].toJSON();
+      assert.equal(log.title, '🔊 Voice-Kanal beigetreten');
+      assert.equal(log.fields[2].value.includes('voice_channel_1'), true);
+      console.log('✓ Voice join log verified');
+    }
+
+    // Case 5.2: Disconnect (Leave / Kick)
+    {
+      sentEmbeds = [];
+      mockAuditLogsResult = {
+        entries: new Map([
+          ['entry_disconnect', {
+            id: 'entry_disconnect',
+            actionType: 'disconnect',
+            targetId: 'user_444',
+            createdTimestamp: Date.now(),
+            executor: {
+              id: 'moderator_disconnect_999',
+              tag: 'ModDisconnect#9999'
+            }
+          }]
+        ])
+      };
+
+      const oldState = {
+        guild: mockGuild,
+        member: mockMember,
+        channelId: 'voice_channel_1'
+      };
+
+      const newState = {
+        guild: mockGuild,
+        member: mockMember,
+        channelId: null
+      };
+
+      await voiceStateUpdate.execute(oldState, newState);
+
+      assert.equal(sentEmbeds.length, 1);
+      const log = sentEmbeds[0].toJSON();
+      assert.equal(log.title, '🔇 Voice-Kanal verlassen');
+
+      const hasDisconnectExecutor = log.fields.some(f => f.name === '✍️ Gekickt von' && f.value.includes('moderator_disconnect_999'));
+      assert.ok(hasDisconnectExecutor, 'Voice disconnect log should include executor');
+      console.log('✓ Voice disconnect log verified');
+    }
+
+    // Case 5.3: Move (Switch / Move)
+    {
+      sentEmbeds = [];
+      mockAuditLogsResult = {
+        entries: new Map([
+          ['entry_move', {
+            id: 'entry_move',
+            actionType: 'move',
+            targetId: 'user_444',
+            createdTimestamp: Date.now(),
+            executor: {
+              id: 'moderator_move_888',
+              tag: 'ModMove#8888'
+            }
+          }]
+        ])
+      };
+
+      const oldState = {
+        guild: mockGuild,
+        member: mockMember,
+        channelId: 'voice_channel_1'
+      };
+
+      const newState = {
+        guild: mockGuild,
+        member: mockMember,
+        channelId: 'voice_channel_2'
+      };
+
+      await voiceStateUpdate.execute(oldState, newState);
+
+      assert.equal(sentEmbeds.length, 1);
+      const log = sentEmbeds[0].toJSON();
+      assert.equal(log.title, '🔀 Voice-Kanal gewechselt');
+
+      const hasMoveExecutor = log.fields.some(f => f.name === '✍️ Verschoben von' && f.value.includes('moderator_move_888'));
+      assert.ok(hasMoveExecutor, 'Voice move log should include executor');
+      console.log('✓ Voice move log verified');
+    }
   }
 
   console.log('OK — server_logging smoke test passed');

@@ -1,4 +1,4 @@
-const { Events, EmbedBuilder } = require('discord.js');
+const { Events, EmbedBuilder, AuditLogEvent } = require('discord.js');
 const config = require('../config');
 
 async function execute(oldState, newState) {
@@ -36,23 +36,69 @@ async function execute(oldState, newState) {
         await logChannel.send({ embeds: [embed] }).catch(() => null);
       } else if (oldChannelId && !newChannelId) {
         // Left channel
+        let executorTag = null;
+        try {
+          const auditLogs = await newState.guild.fetchAuditLogs({
+            type: AuditLogEvent.MemberDisconnect,
+            limit: 5,
+          });
+          const logEntry = [...auditLogs.entries.values()].find(
+            entry => entry.targetId === member.user.id &&
+                     (Date.now() - entry.createdTimestamp) < 10000
+          );
+          if (logEntry && logEntry.executor) {
+            executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
+          }
+        } catch (err) {
+          console.warn('[voice-log] Failed to fetch audit logs for disconnect:', err);
+        }
+
         embed.setTitle('🔇 Voice-Kanal verlassen')
           .setColor(0xe67e22)
           .addFields(
             { name: '👤 User', value: `<@${member.user.id}> (${member.user.tag})`, inline: true },
-            { name: '🆔 User-ID', value: member.user.id, inline: true },
-            { name: '📢 Kanal', value: `<#${oldChannelId}>`, inline: false }
+            { name: '🆔 User-ID', value: member.user.id, inline: true }
           );
+
+        if (executorTag) {
+          embed.addFields({ name: '✍️ Gekickt von', value: executorTag, inline: true });
+        }
+
+        embed.addFields({ name: '📢 Kanal', value: `<#${oldChannelId}>`, inline: false });
         await logChannel.send({ embeds: [embed] }).catch(() => null);
       } else if (oldChannelId && newChannelId) {
         // Switched channel
+        let executorTag = null;
+        try {
+          const auditLogs = await newState.guild.fetchAuditLogs({
+            type: AuditLogEvent.MemberMove,
+            limit: 5,
+          });
+          const logEntry = [...auditLogs.entries.values()].find(
+            entry => entry.targetId === member.user.id &&
+                     (Date.now() - entry.createdTimestamp) < 10000
+          );
+          if (logEntry && logEntry.executor) {
+            executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
+          }
+        } catch (err) {
+          console.warn('[voice-log] Failed to fetch audit logs for move:', err);
+        }
+
         embed.setTitle('🔀 Voice-Kanal gewechselt')
           .addFields(
             { name: '👤 User', value: `<@${member.user.id}> (${member.user.tag})`, inline: true },
-            { name: '🆔 User-ID', value: member.user.id, inline: true },
-            { name: 'Von', value: `<#${oldChannelId}>`, inline: true },
-            { name: 'Nach', value: `<#${newChannelId}>`, inline: true }
+            { name: '🆔 User-ID', value: member.user.id, inline: true }
           );
+
+        if (executorTag) {
+          embed.addFields({ name: '✍️ Verschoben von', value: executorTag, inline: true });
+        }
+
+        embed.addFields(
+          { name: 'Von', value: `<#${oldChannelId}>`, inline: true },
+          { name: 'Nach', value: `<#${newChannelId}>`, inline: true }
+        );
         await logChannel.send({ embeds: [embed] }).catch(() => null);
       }
     }

@@ -1,4 +1,4 @@
-const { Events, EmbedBuilder } = require('discord.js');
+const { Events, EmbedBuilder, AuditLogEvent } = require('discord.js');
 const config = require('../config');
 
 async function execute(oldMember, newMember) {
@@ -16,16 +16,42 @@ async function execute(oldMember, newMember) {
     if (isProfileEnabled && oldMember.nickname !== newMember.nickname) {
       const oldNick = oldMember.nickname ?? '(Keiner)';
       const newNick = newMember.nickname ?? '(Keiner)';
+
+      let executorTag = null;
+      try {
+        const auditLogs = await newMember.guild.fetchAuditLogs({
+          type: AuditLogEvent.MemberUpdate,
+          limit: 5,
+        });
+        const logEntry = [...auditLogs.entries.values()].find(
+          entry => entry.targetId === newMember.user.id &&
+                   entry.changes.some(c => c.key === 'nick') &&
+                   (Date.now() - entry.createdTimestamp) < 10000
+        );
+        if (logEntry && logEntry.executor) {
+          executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
+        }
+      } catch (err) {
+        console.warn('[roles-profile-log] Failed to fetch audit logs for nickname change:', err);
+      }
+
       const embed = new EmbedBuilder()
         .setTitle('👤 Nickname geändert')
         .setColor(0x3498db)
         .addFields(
           { name: '👤 User', value: `<@${newMember.user.id}> (${newMember.user.tag})`, inline: true },
-          { name: '🆔 User-ID', value: newMember.user.id, inline: true },
-          { name: 'Vorher', value: oldNick, inline: true },
-          { name: 'Nachher', value: newNick, inline: true }
-        )
-        .setTimestamp();
+          { name: '🆔 User-ID', value: newMember.user.id, inline: true }
+        );
+
+      if (executorTag) {
+        embed.addFields({ name: '✍️ Geändert von', value: executorTag, inline: true });
+      }
+
+      embed.addFields(
+        { name: 'Vorher', value: oldNick, inline: true },
+        { name: 'Nachher', value: newNick, inline: true }
+      )
+      .setTimestamp();
       await logChannel.send({ embeds: [embed] }).catch(() => null);
     }
 
@@ -39,14 +65,36 @@ async function execute(oldMember, newMember) {
       const removed = [...oldRoles.values()].filter(r => !newRoles.has(r.id));
 
       if (added.length > 0 || removed.length > 0) {
+        let executorTag = null;
+        try {
+          const auditLogs = await newMember.guild.fetchAuditLogs({
+            type: AuditLogEvent.MemberRoleUpdate,
+            limit: 5,
+          });
+          const logEntry = [...auditLogs.entries.values()].find(
+            entry => entry.targetId === newMember.user.id &&
+                     (Date.now() - entry.createdTimestamp) < 10000
+          );
+          if (logEntry && logEntry.executor) {
+            executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
+          }
+        } catch (err) {
+          console.warn('[roles-profile-log] Failed to fetch audit logs for role update:', err);
+        }
+
         const embed = new EmbedBuilder()
           .setTitle('🛡️ Rollen geändert')
           .setColor(0x9b59b6)
           .addFields(
             { name: '👤 User', value: `<@${newMember.user.id}> (${newMember.user.tag})`, inline: true },
             { name: '🆔 User-ID', value: newMember.user.id, inline: true }
-          )
-          .setTimestamp();
+          );
+
+        if (executorTag) {
+          embed.addFields({ name: '✍️ Geändert von', value: executorTag, inline: true });
+        }
+
+        embed.setTimestamp();
 
         if (added.length > 0) {
           embed.addFields({ name: '➕ Hinzugefügt', value: added.map(r => `<@&${r.id}>`).join(', '), inline: false });
