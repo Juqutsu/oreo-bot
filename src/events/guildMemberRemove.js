@@ -31,9 +31,36 @@ async function execute(member) {
   } catch (err) {
     console.error('[leave-log] failed to log member leave:', err);
   }
+
+  // Leave Card system
+  try {
+    const isLeaveOn = await config.isLeaveEnabled(guildId);
+    if (isLeaveOn) {
+      const leaveChannelId = await config.getLeaveChannelId(guildId);
+      if (leaveChannelId) {
+        const leaveChannel = await member.guild.channels.fetch(leaveChannelId).catch(() => null);
+        if (leaveChannel) {
+          const leaveMessageTemplate = await config.getLeaveMessage(guildId);
+          const bgUrl = await config.getLeaveBgUrl(guildId);
+
+          const { generateCard, formatWelcomeMessage } = require('../welcomeCard');
+          const cardBuffer = await generateCard(member.user, member.guild, 'leave', bgUrl);
+
+          const { AttachmentBuilder } = require('discord.js');
+          const attachment = new AttachmentBuilder(cardBuffer, { name: 'leave.png' });
+          const messageText = formatWelcomeMessage(leaveMessageTemplate, member);
+
+          await leaveChannel.send({ content: messageText, files: [attachment] });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[leave-system] failed to send leave card:', err);
+  }
 }
 
 module.exports = {
   name: Events.GuildMemberRemove,
   execute,
 };
+

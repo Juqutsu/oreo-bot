@@ -16,6 +16,8 @@ const CHANNEL_TYPE_CHOICES = [
   { name: 'modlog', value: 'modlog' },
   { name: 'msglog', value: 'msglog' },
   { name: 'serverlog', value: 'serverlog' },
+  { name: 'welcome', value: 'welcome' },
+  { name: 'leave', value: 'leave' },
 ];
 
 // type → DB-Spalte
@@ -24,6 +26,8 @@ const CHANNEL_COLUMN = {
   modlog: 'mod_log_channel_id',
   msglog: 'msg_log_channel_id',
   serverlog: 'server_log_channel_id',
+  welcome: 'welcome_channel_id',
+  leave: 'leave_channel_id',
 };
 
 // type → User-facing Label
@@ -32,6 +36,8 @@ const CHANNEL_LABEL = {
   modlog: 'modlog',
   msglog: 'msglog',
   serverlog: 'serverlog',
+  welcome: 'welcome',
+  leave: 'leave',
 };
 
 const FEATURE_CHOICES = [
@@ -154,6 +160,38 @@ module.exports = {
           sub.setName('list-bad-words').setDescription('Listet alle blockierten Wörter des Toxizitäts-Filters auf.')
         )
     )
+    .addSubcommandGroup((group) =>
+      group.setName('welcome').setDescription('Willkommens-System konfigurieren')
+        .addSubcommand((sub) =>
+          sub.setName('set').setDescription('Konfiguriert das Willkommens-System.')
+            .addBooleanOption((o) => o.setName('enabled').setDescription('Aktivieren oder Deaktivieren').setRequired(false))
+            .addChannelOption((o) => o.setName('channel').setDescription('Kanal für Willkommenskarten').setRequired(false).addChannelTypes(ChannelType.GuildText))
+            .addStringOption((o) => o.setName('message').setDescription('Nachrichtentext (Platzhalter: {user}, {username}, {server}, {memberCount})').setRequired(false).setMaxLength(255))
+            .addStringOption((o) => o.setName('background').setDescription('Bild-URL für den Karten-Hintergrund (oder "none" zum Löschen)').setRequired(false).setMaxLength(512))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('test').setDescription('Generiert und sendet eine Test-Willkommenskarte.')
+        )
+        .addSubcommand((sub) =>
+          sub.setName('edit').setDescription('Öffnet ein Modal zur Konfiguration von Design, Text & Farben.')
+        )
+    )
+    .addSubcommandGroup((group) =>
+      group.setName('leave').setDescription('Leave-System konfigurieren')
+        .addSubcommand((sub) =>
+          sub.setName('set').setDescription('Konfiguriert das Leave-System.')
+            .addBooleanOption((o) => o.setName('enabled').setDescription('Aktivieren oder Deaktivieren').setRequired(false))
+            .addChannelOption((o) => o.setName('channel').setDescription('Kanal für Leave-Karten').setRequired(false).addChannelTypes(ChannelType.GuildText))
+            .addStringOption((o) => o.setName('message').setDescription('Nachrichtentext (Platzhalter: {user}, {username}, {server}, {memberCount})').setRequired(false).setMaxLength(255))
+            .addStringOption((o) => o.setName('background').setDescription('Bild-URL für den Karten-Hintergrund (oder "none" zum Löschen)').setRequired(false).setMaxLength(512))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('test').setDescription('Generiert und sendet eine Test-Leave-Karte.')
+        )
+        .addSubcommand((sub) =>
+          sub.setName('edit').setDescription('Öffnet ein Modal zur Konfiguration von Design, Text & Farben.')
+        )
+    )
     .addSubcommand((sub) =>
       sub.setName('show').setDescription('Zeigt die komplette Server-Konfiguration.')
     ),
@@ -194,6 +232,18 @@ module.exports = {
       if (sub === 'add-bad-word') return handleSecurityAddBadWord(interaction);
       if (sub === 'remove-bad-word') return handleSecurityRemoveBadWord(interaction);
       if (sub === 'list-bad-words') return handleSecurityListBadWords(interaction);
+    }
+
+    if (group === 'welcome') {
+      if (sub === 'set')  return handleWelcomeSet(interaction);
+      if (sub === 'test') return handleWelcomeTest(interaction);
+      if (sub === 'edit') return handleWelcomeEdit(interaction);
+    }
+
+    if (group === 'leave') {
+      if (sub === 'set')  return handleLeaveSet(interaction);
+      if (sub === 'test') return handleLeaveTest(interaction);
+      if (sub === 'edit') return handleLeaveEdit(interaction);
     }
 
     if (group === null && sub === 'show') {
@@ -534,7 +584,7 @@ async function handleChannelList(interaction) {
   let row;
   try {
     const [rows] = await getPool().execute(
-      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id FROM guilds WHERE guild_id = ?',
+      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, welcome_channel_id, leave_channel_id FROM guilds WHERE guild_id = ?',
       [interaction.guildId],
     );
     row = rows[0] ?? null;
@@ -551,6 +601,8 @@ async function handleChannelList(interaction) {
   const modlogEnvId = !modlogDbId && process.env.MODLOG_CHANNEL_ID ? process.env.MODLOG_CHANNEL_ID : null;
   const msglogId = row?.msg_log_channel_id ? String(row.msg_log_channel_id) : null;
   const serverlogId = row?.server_log_channel_id ? String(row.server_log_channel_id) : null;
+  const welcomeId = row?.welcome_channel_id ? String(row.welcome_channel_id) : null;
+  const leaveId = row?.leave_channel_id ? String(row.leave_channel_id) : null;
 
   const reportLine = reportId ? `<#${reportId}>` : '(nicht konfiguriert)';
   let modlogLine;
@@ -559,6 +611,8 @@ async function handleChannelList(interaction) {
   else modlogLine = '(nicht konfiguriert)';
   const msglogLine = msglogId ? `<#${msglogId}>` : '(nicht konfiguriert)';
   const serverlogLine = serverlogId ? `<#${serverlogId}>` : '(nicht konfiguriert)';
+  const welcomeLine = welcomeId ? `<#${welcomeId}>` : '(nicht konfiguriert)';
+  const leaveLine = leaveId ? `<#${leaveId}>` : '(nicht konfiguriert)';
 
   const embed = new EmbedBuilder()
     .setTitle('🔧 Channel-Konfiguration')
@@ -568,6 +622,8 @@ async function handleChannelList(interaction) {
       { name: 'Mod-Log-Channel', value: modlogLine, inline: false },
       { name: 'Message-Log-Channel', value: msglogLine, inline: false },
       { name: 'Server-Log-Channel', value: serverlogLine, inline: false },
+      { name: 'Welcome-Channel', value: welcomeLine, inline: false },
+      { name: 'Leave-Channel', value: leaveLine, inline: false },
     )
     .setFooter({ text: '🐾 Oreo' });
 
@@ -1064,6 +1120,8 @@ async function handleShow(interaction) {
   const modlogEnvId = !modlogDbId && process.env.MODLOG_CHANNEL_ID ? process.env.MODLOG_CHANNEL_ID : null;
   const msglogId = guildRow?.msg_log_channel_id ? String(guildRow.msg_log_channel_id) : null;
   const serverlogId = guildRow?.server_log_channel_id ? String(guildRow.server_log_channel_id) : null;
+  const welcomeId = guildRow?.welcome_channel_id ? String(guildRow.welcome_channel_id) : null;
+  const leaveId = guildRow?.leave_channel_id ? String(guildRow.leave_channel_id) : null;
 
   const reportLine = reportId ? `<#${reportId}>` : '(nicht konfiguriert)';
   let modlogLine;
@@ -1072,6 +1130,8 @@ async function handleShow(interaction) {
   else modlogLine = '(nicht konfiguriert)';
   const msglogLine = msglogId ? `<#${msglogId}>` : '(nicht konfiguriert)';
   const serverlogLine = serverlogId ? `<#${serverlogId}>` : '(nicht konfiguriert)';
+  const welcomeChannelLine = welcomeId ? `<#${welcomeId}>` : '(nicht konfiguriert)';
+  const leaveChannelLine = leaveId ? `<#${leaveId}>` : '(nicht konfiguriert)';
 
   // Features
   const automodOn = Boolean(guildRow?.automod_enabled);
@@ -1092,6 +1152,20 @@ async function handleShow(interaction) {
   const toxicityEnabledLine = toxicityOn
     ? `✅ aktiv (Aktion: **${toxicityActionText}**)`
     : '❌ deaktiviert';
+
+  const welcomeOn = Boolean(guildRow?.welcome_enabled);
+  const welcomeMessage = guildRow?.welcome_message ?? 'Willkommen {user} auf {server}!';
+  const welcomeBg = guildRow?.welcome_bg_url ? `[Link](${guildRow.welcome_bg_url})` : 'Standard';
+  const welcomeAccent = guildRow?.welcome_accent_color ?? '#5865f2';
+  const welcomeTextcolor = guildRow?.welcome_text_color ?? '#7289da';
+  const welcomeLineShow = welcomeOn ? `✅ aktiv (Msg: "${welcomeMessage}", BG: ${welcomeBg}, Accent: \`${welcomeAccent}\`, Text: \`${welcomeTextcolor}\`)` : '❌ deaktiviert';
+
+  const leaveOn = Boolean(guildRow?.leave_enabled);
+  const leaveMessage = guildRow?.leave_message ?? '{user} hat den Server verlassen.';
+  const leaveBg = guildRow?.leave_bg_url ? `[Link](${guildRow.leave_bg_url})` : 'Standard';
+  const leaveAccent = guildRow?.leave_accent_color ?? '#e74c3c';
+  const leaveTextcolor = guildRow?.leave_text_color ?? '#e74c3c';
+  const leaveLineShow = leaveOn ? `✅ aktiv (Msg: "${leaveMessage}", BG: ${leaveBg}, Accent: \`${leaveAccent}\`, Text: \`${leaveTextcolor}\`)` : '❌ deaktiviert';
 
   // Server Log Toggles
   const logProfileOn = Boolean(guildRow?.log_profile_enabled);
@@ -1141,8 +1215,8 @@ async function handleShow(interaction) {
     .setTitle('🛡️ Server-Konfiguration')
     .setColor(0x5865f2)
     .addFields(
-      { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}\nServer-Log: ${serverlogLine}`, inline: false },
-      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}`,   inline: false },
+      { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}\nServer-Log: ${serverlogLine}\nWelcome-Channel: ${welcomeChannelLine}\nLeave-Channel: ${leaveChannelLine}`, inline: false },
+      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nWelcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}`,   inline: false },
       { name: '📁 Server-Logs',  value: serverLogToggles, inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
@@ -1151,4 +1225,336 @@ async function handleShow(interaction) {
     .setFooter({ text: '🐾 Oreo' });
 
   return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
+async function handleWelcomeSet(interaction) {
+  const enabled = interaction.options.getBoolean('enabled');
+  const channel = interaction.options.getChannel('channel');
+  const message = interaction.options.getString('message');
+  const background = interaction.options.getString('background');
+
+  if (enabled === null && channel === null && message === null && background === null) {
+    return interaction.reply({
+      content: '❌ Bitte gib mindestens eine Option an, die du konfigurieren möchtest.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const pool = getPool();
+  try {
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+  } catch (err) {
+    console.error('/config welcome set DB error (init):', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const config = require('../config');
+  const updates = [];
+
+  try {
+    if (enabled !== null) {
+      await config.setWelcomeEnabled(interaction.guildId, enabled);
+      updates.push(`Aktiviert: **${enabled ? 'Ja' : 'Nein'}**`);
+    }
+    if (channel !== null) {
+      await config.setWelcomeChannelId(interaction.guildId, channel.id);
+      updates.push(`Kanal: <#${channel.id}>`);
+    }
+    if (message !== null) {
+      await config.setWelcomeMessage(interaction.guildId, message);
+      updates.push(`Nachricht: *${message}*`);
+    }
+    if (background !== null) {
+      const cleanBg = background.trim() === 'none' || background.trim() === '' ? null : background;
+      await config.setWelcomeBgUrl(interaction.guildId, cleanBg);
+      updates.push(`Hintergrund: ${cleanBg ? `[Link](${cleanBg})` : 'Standard-Verlauf'}`);
+    }
+  } catch (err) {
+    console.error('/config welcome set DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ **Willkommens-System konfiguriert:**\n${updates.map((u) => `• ${u}`).join('\n')}`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleWelcomeTest(interaction) {
+  const config = require('../config');
+
+  try {
+    const channelId = await config.getWelcomeChannelId(interaction.guildId);
+    const welcomeMessageTemplate = await config.getWelcomeMessage(interaction.guildId);
+    const bgUrl = await config.getWelcomeBgUrl(interaction.guildId);
+
+    const { generateCard, formatWelcomeMessage } = require('../welcomeCard');
+    const cardBuffer = await generateCard(interaction.user, interaction.guild, 'welcome', bgUrl);
+
+    const { AttachmentBuilder } = require('discord.js');
+    const attachment = new AttachmentBuilder(cardBuffer, { name: 'welcome.png' });
+    const messageText = formatWelcomeMessage(welcomeMessageTemplate, interaction.member);
+
+    let targetChannel = null;
+    if (channelId) {
+      targetChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+    }
+
+    if (targetChannel) {
+      await targetChannel.send({ content: messageText, files: [attachment] });
+      return interaction.editReply({
+        content: `✅ Test-Willkommenskarte wurde in <#${channelId}> gesendet.`,
+      });
+    } else {
+      return interaction.editReply({
+        content: `ℹ️ Kein Willkommenskanal konfiguriert. Hier ist eine Vorschau:\n**Text:** ${messageText}`,
+        files: [attachment],
+      });
+    }
+  } catch (err) {
+    console.error('/config welcome test error:', err);
+    return interaction.editReply({
+      content: '❌ Fehler bei der Generierung der Test-Willkommenskarte: ' + err.message,
+    });
+  }
+}
+
+async function handleLeaveSet(interaction) {
+  const enabled = interaction.options.getBoolean('enabled');
+  const channel = interaction.options.getChannel('channel');
+  const message = interaction.options.getString('message');
+  const background = interaction.options.getString('background');
+
+  if (enabled === null && channel === null && message === null && background === null) {
+    return interaction.reply({
+      content: '❌ Bitte gib mindestens eine Option an, die du konfigurieren möchtest.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const pool = getPool();
+  try {
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+  } catch (err) {
+    console.error('/config leave set DB error (init):', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const config = require('../config');
+  const updates = [];
+
+  try {
+    if (enabled !== null) {
+      await config.setLeaveEnabled(interaction.guildId, enabled);
+      updates.push(`Aktiviert: **${enabled ? 'Ja' : 'Nein'}**`);
+    }
+    if (channel !== null) {
+      await config.setLeaveChannelId(interaction.guildId, channel.id);
+      updates.push(`Kanal: <#${channel.id}>`);
+    }
+    if (message !== null) {
+      await config.setLeaveMessage(interaction.guildId, message);
+      updates.push(`Nachricht: *${message}*`);
+    }
+    if (background !== null) {
+      const cleanBg = background.trim() === 'none' || background.trim() === '' ? null : background;
+      await config.setLeaveBgUrl(interaction.guildId, cleanBg);
+      updates.push(`Hintergrund: ${cleanBg ? `[Link](${cleanBg})` : 'Standard-Verlauf'}`);
+    }
+  } catch (err) {
+    console.error('/config leave set DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ **Leave-System konfiguriert:**\n${updates.map((u) => `• ${u}`).join('\n')}`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleLeaveTest(interaction) {
+  const config = require('../config');
+
+  try {
+    const channelId = await config.getLeaveChannelId(interaction.guildId);
+    const leaveMessageTemplate = await config.getLeaveMessage(interaction.guildId);
+    const bgUrl = await config.getLeaveBgUrl(interaction.guildId);
+
+    const { generateCard, formatWelcomeMessage } = require('../welcomeCard');
+    const cardBuffer = await generateCard(interaction.user, interaction.guild, 'leave', bgUrl);
+
+    const { AttachmentBuilder } = require('discord.js');
+    const attachment = new AttachmentBuilder(cardBuffer, { name: 'leave.png' });
+    const messageText = formatWelcomeMessage(leaveMessageTemplate, interaction.member);
+
+    let targetChannel = null;
+    if (channelId) {
+      targetChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+    }
+
+    if (targetChannel) {
+      await targetChannel.send({ content: messageText, files: [attachment] });
+      return interaction.editReply({
+        content: `✅ Test-Leavekarte wurde in <#${channelId}> gesendet.`,
+      });
+    } else {
+      return interaction.editReply({
+        content: `ℹ️ Kein Leavekanal konfiguriert. Hier ist eine Vorschau:\n**Text:** ${messageText}`,
+        files: [attachment],
+      });
+    }
+  } catch (err) {
+    console.error('/config leave test error:', err);
+    return interaction.editReply({
+      content: '❌ Fehler bei der Generierung der Test-Leavekarte: ' + err.message,
+    });
+  }
+}
+
+async function handleWelcomeEdit(interaction) {
+  const config = require('../config');
+  let message, bg, accent, textcolor;
+  try {
+    message = await config.getWelcomeMessage(interaction.guildId);
+    bg = await config.getWelcomeBgUrl(interaction.guildId);
+    accent = await config.getWelcomeAccentColor(interaction.guildId);
+    textcolor = await config.getWelcomeTextColor(interaction.guildId);
+  } catch (err) {
+    console.error('Failed to load welcome info for modal:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+
+  const modal = new ModalBuilder()
+    .setCustomId('welcome:config_modal')
+    .setTitle('Willkommens-Design');
+
+  const msgInput = new TextInputBuilder()
+    .setCustomId('message')
+    .setLabel('Willkommens-Text')
+    .setPlaceholder('z.B. Willkommen {user} auf {server}!')
+    .setStyle(TextInputStyle.Paragraph)
+    .setValue(message)
+    .setRequired(false)
+    .setMaxLength(255);
+
+  const bgInput = new TextInputBuilder()
+    .setCustomId('background')
+    .setLabel('Hintergrundbild URL ("none" für Standard)')
+    .setPlaceholder('https://picsum.photos/800/400')
+    .setStyle(TextInputStyle.Short)
+    .setValue(bg || '')
+    .setRequired(false)
+    .setMaxLength(512);
+
+  const accentInput = new TextInputBuilder()
+    .setCustomId('accent')
+    .setLabel('Akzentfarbe (Glow / Ring) (Hex-Code)')
+    .setPlaceholder('#5865f2')
+    .setStyle(TextInputStyle.Short)
+    .setValue(accent)
+    .setRequired(false)
+    .setMaxLength(7);
+
+  const textColorInput = new TextInputBuilder()
+    .setCustomId('textcolor')
+    .setLabel('Textfarbe (Header-Name) (Hex-Code)')
+    .setPlaceholder('#7289da')
+    .setStyle(TextInputStyle.Short)
+    .setValue(textcolor)
+    .setRequired(false)
+    .setMaxLength(7);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(msgInput),
+    new ActionRowBuilder().addComponents(bgInput),
+    new ActionRowBuilder().addComponents(accentInput),
+    new ActionRowBuilder().addComponents(textColorInput)
+  );
+
+  await interaction.showModal(modal);
+}
+
+async function handleLeaveEdit(interaction) {
+  const config = require('../config');
+  let message, bg, accent, textcolor;
+  try {
+    message = await config.getLeaveMessage(interaction.guildId);
+    bg = await config.getLeaveBgUrl(interaction.guildId);
+    accent = await config.getLeaveAccentColor(interaction.guildId);
+    textcolor = await config.getLeaveTextColor(interaction.guildId);
+  } catch (err) {
+    console.error('Failed to load leave info for modal:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+
+  const modal = new ModalBuilder()
+    .setCustomId('leave:config_modal')
+    .setTitle('Leave-Design');
+
+  const msgInput = new TextInputBuilder()
+    .setCustomId('message')
+    .setLabel('Leave-Text')
+    .setPlaceholder('z.B. {user} ist gegangen.')
+    .setStyle(TextInputStyle.Paragraph)
+    .setValue(message)
+    .setRequired(false)
+    .setMaxLength(255);
+
+  const bgInput = new TextInputBuilder()
+    .setCustomId('background')
+    .setLabel('Hintergrundbild URL ("none" für Standard)')
+    .setPlaceholder('https://picsum.photos/800/400')
+    .setStyle(TextInputStyle.Short)
+    .setValue(bg || '')
+    .setRequired(false)
+    .setMaxLength(512);
+
+  const accentInput = new TextInputBuilder()
+    .setCustomId('accent')
+    .setLabel('Akzentfarbe (Glow / Ring) (Hex-Code)')
+    .setPlaceholder('#e74c3c')
+    .setStyle(TextInputStyle.Short)
+    .setValue(accent)
+    .setRequired(false)
+    .setMaxLength(7);
+
+  const textColorInput = new TextInputBuilder()
+    .setCustomId('textcolor')
+    .setLabel('Textfarbe (Header-Name) (Hex-Code)')
+    .setPlaceholder('#e74c3c')
+    .setStyle(TextInputStyle.Short)
+    .setValue(textcolor)
+    .setRequired(false)
+    .setMaxLength(7);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(msgInput),
+    new ActionRowBuilder().addComponents(bgInput),
+    new ActionRowBuilder().addComponents(accentInput),
+    new ActionRowBuilder().addComponents(textColorInput)
+  );
+
+  await interaction.showModal(modal);
 }

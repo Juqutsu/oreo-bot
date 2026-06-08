@@ -196,9 +196,36 @@ async function execute(member) {
   } catch (err) {
     console.error('[invite-log] failed to track member join invite:', err);
   }
+
+  // Welcome Card system
+  try {
+    const isWelcomeOn = await config.isWelcomeEnabled(guildId);
+    if (isWelcomeOn) {
+      const welcomeChannelId = await config.getWelcomeChannelId(guildId);
+      if (welcomeChannelId) {
+        const welcomeChannel = await member.guild.channels.fetch(welcomeChannelId).catch(() => null);
+        if (welcomeChannel) {
+          const welcomeMessageTemplate = await config.getWelcomeMessage(guildId);
+          const bgUrl = await config.getWelcomeBgUrl(guildId);
+
+          const { generateCard, formatWelcomeMessage } = require('../welcomeCard');
+          const cardBuffer = await generateCard(member.user, member.guild, 'welcome', bgUrl);
+
+          const { AttachmentBuilder } = require('discord.js');
+          const attachment = new AttachmentBuilder(cardBuffer, { name: 'welcome.png' });
+          const messageText = formatWelcomeMessage(welcomeMessageTemplate, member);
+
+          await welcomeChannel.send({ content: messageText, files: [attachment] });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[welcome-system] failed to send welcome card:', err);
+  }
 }
 
 module.exports = {
   name: Events.GuildMemberAdd,
   execute,
 };
+

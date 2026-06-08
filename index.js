@@ -8,6 +8,8 @@ const perms = require('./src/perms');
 const reportInteractions = require('./src/interactions/report');
 const announcementInteractions = require('./src/interactions/announcement');
 const captchaInteractions = require('./src/interactions/captcha');
+const welcomeInteractions = require('./src/interactions/welcome');
+
 
 const {
   DISCORD_TOKEN, CLIENT_ID, GUILD_ID,
@@ -99,8 +101,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // Auto-defer all slash commands except announcement (which needs to show modal first)
-    if (interaction.isChatInputCommand() && interaction.commandName !== 'announcement') {
+    // Auto-defer all slash commands except announcement and config edit subcommands (which need to show modal first)
+    const isConfigEdit = interaction.commandName === 'config' && interaction.options.getSubcommand(false) === 'edit';
+    if (interaction.isChatInputCommand() && interaction.commandName !== 'announcement' && !isConfigEdit) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
     }
 
@@ -147,7 +150,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     try {
       const handled = await reportInteractions.dispatch(interaction)
                    || await announcementInteractions.dispatch(interaction)
-                   || await captchaInteractions.dispatch(interaction);
+                   || await captchaInteractions.dispatch(interaction)
+                   || await welcomeInteractions.dispatch(interaction);
       if (!handled) {
         await interaction.reply({ content: 'Unbekannte Interaktion.', flags: MessageFlags.Ephemeral }).catch(() => {});
       }

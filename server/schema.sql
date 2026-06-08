@@ -268,3 +268,25 @@ ALTER TABLE guilds ADD COLUMN log_roles_enabled TINYINT(1) NOT NULL DEFAULT 0 AF
 -- ============================================================
 ALTER TABLE guilds ADD COLUMN log_messages_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER log_roles_enabled;
 
+-- ============================================================
+-- Stage 16 Migration: Welcome & Leave System
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN welcome_channel_id BIGINT UNSIGNED NULL;
+ALTER TABLE guilds ADD COLUMN leave_channel_id BIGINT UNSIGNED NULL;
+ALTER TABLE guilds ADD COLUMN welcome_enabled TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE guilds ADD COLUMN leave_enabled TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE guilds ADD COLUMN welcome_message VARCHAR(255) NOT NULL DEFAULT 'Willkommen {user} auf {server}!';
+ALTER TABLE guilds ADD COLUMN leave_message VARCHAR(255) NOT NULL DEFAULT '{user} hat den Server verlassen.';
+ALTER TABLE guilds ADD COLUMN welcome_bg_url VARCHAR(512) NULL;
+ALTER TABLE guilds ADD COLUMN leave_bg_url VARCHAR(512) NULL;
+
+-- ============================================================
+-- Stage 16.5 Migration: Welcome & Leave Custom Colors
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN welcome_accent_color VARCHAR(10) NOT NULL DEFAULT '#5865f2';
+ALTER TABLE guilds ADD COLUMN welcome_text_color VARCHAR(10) NOT NULL DEFAULT '#7289da';
+ALTER TABLE guilds ADD COLUMN leave_accent_color VARCHAR(10) NOT NULL DEFAULT '#e74c3c';
+ALTER TABLE guilds ADD COLUMN leave_text_color VARCHAR(10) NOT NULL DEFAULT '#e74c3c';
+
+
+
