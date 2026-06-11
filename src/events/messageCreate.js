@@ -6,6 +6,101 @@ const escalations = require('../escalations');
 const obfuscation = require('../obfuscation');
 const { getOrCreateMutedRole } = require('../composables/mutedRole');
 
+// In-memory message history for channel-hopping detection
+const channelHoppingHistory = new Map();
+const HOPPING_TIMEFRAME_MS = 10 * 1000; // 10 seconds
+const HOPPING_UNIQUE_CHANNELS_LIMIT = 3; // 3 unique channels
+
+async function checkChannelHopping(message, member) {
+  const guildId = message.guild.id;
+  const now = Date.now();
+  const userId = message.author.id;
+
+  let history = channelHoppingHistory.get(userId);
+  if (!history) {
+    history = [];
+    channelHoppingHistory.set(userId, history);
+  }
+
+  // Record current message
+  history.push({
+    timestamp: now,
+    channelId: message.channel.id,
+    message: message,
+  });
+
+  // Prune history older than the timeframe
+  const cutoff = now - HOPPING_TIMEFRAME_MS;
+  history = history.filter((h) => h.timestamp >= cutoff);
+  channelHoppingHistory.set(userId, history);
+
+  // Check unique channels
+  const uniqueChannels = new Set(history.map((h) => h.channelId));
+  if (uniqueChannels.size >= HOPPING_UNIQUE_CHANNELS_LIMIT) {
+    const durationMs = 24 * 60 * 60 * 1000; // 24 hours
+    const expiresAt = new Date(Date.now() + durationMs);
+    let caseNumber = null;
+    const reason = 'Channel-Hopping Spam-Erkennung (Automatischer Timeout)';
+
+    // 1. Timeout user
+    await member.timeout(durationMs, `Oreo AutoMod: ${reason}`).catch((err) => {
+      console.error('[channel-hopping] failed to timeout member:', err);
+    });
+
+    // 2. Delete messages in history
+    for (const item of history) {
+      await item.message.delete().catch(() => null);
+    }
+
+    // 3. Clear user history to prevent multiple triggers for same window
+    channelHoppingHistory.delete(userId);
+
+    // 4. Create case in DB
+    try {
+      const result = await cases.createCase({
+        guildId,
+        userId: userId,
+        moderatorId: message.client.user.id,
+        type: 'timeout',
+        reason,
+        source: 'automod',
+        durationMs: BigInt(durationMs),
+        expiresAt,
+      });
+      caseNumber = result?.caseNumber;
+    } catch (err) {
+      console.error('[channel-hopping] createCase failed:', err);
+    }
+
+    // 5. Send embed to ModLog channel
+    try {
+      const modLogChannelId = await config.getModLogChannelId(guildId);
+      if (modLogChannelId) {
+        const logChannel = await message.guild.channels.fetch(modLogChannelId).catch(() => null);
+        if (logChannel) {
+          const embed = buildModLogEmbed({
+            action: 'timeout',
+            caseNumber,
+            target: message.author,
+            mod: message.client.user,
+            reason,
+            durationMs,
+          });
+          if (embed) {
+            await logChannel.send({ embeds: [embed] }).catch(() => null);
+          }
+        }
+      }
+    } catch (logErr) {
+      console.warn('[channel-hopping] failed to log to modlog:', logErr);
+    }
+
+    return true; // Spam action taken
+  }
+
+  return false;
+}
+
 async function execute(message) {
   if (message.author.bot || !message.guild) return;
 
@@ -14,6 +109,14 @@ async function execute(message) {
 
   if (member.permissions.has(PermissionFlagsBits.ManageMessages) || member.permissions.has(PermissionFlagsBits.Administrator)) {
     return;
+  }
+
+  // --- Channel-Hopping Anti-Spam Check ---
+  try {
+    const isSpam = await checkChannelHopping(message, member);
+    if (isSpam) return; // Stop processing further features for this message (already deleted/timed out)
+  } catch (err) {
+    console.error('[messageCreate] Channel-hopping check failed:', err);
   }
 
   const guildId = message.guild.id;

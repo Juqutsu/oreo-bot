@@ -10,7 +10,18 @@ module.exports = {
     .setDescription('Bannt einen Nutzer vom Server.')
     .addUserOption((option) => option.setName('target').setDescription('Wer soll gebannt werden?').setRequired(true))
     .addStringOption((option) => option.setName('duration').setDescription('Optional: Dauer des Bans (z.B. 30m, 2h, 7d)').setRequired(false))
-    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setRequired(false)),
+    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setRequired(false))
+    .addStringOption((option) =>
+      option.setName('delete_messages')
+        .setDescription('Optional: Verlauf der gelöschten Nachrichten des Nutzers')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Keine', value: '0' },
+          { name: 'Letzte Stunde', value: '3600' },
+          { name: 'Letzten 24 Stunden', value: '86400' },
+          { name: 'Letzten 7 Tage', value: '604800' }
+        )
+    ),
 
   requiredTier: 'owner',
 
@@ -18,6 +29,7 @@ module.exports = {
     const target = interaction.options.getUser('target');
     const durationInput = interaction.options.getString('duration');
     const reason = interaction.options.getString('reason') ?? 'Kein Grund angegeben';
+    const deleteMessagesInput = interaction.options.getString('delete_messages');
 
     let durationMs = null;
     let expiresAt = null;
@@ -62,9 +74,12 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
+    const deleteMessageSeconds = deleteMessagesInput ? parseInt(deleteMessagesInput, 10) : 0;
+
     try {
       await interaction.guild.members.ban(target.id, {
         reason: `${moderator.user.tag}: ${reason}`,
+        deleteMessageSeconds,
       });
     } catch (e) {
       console.error(e);
