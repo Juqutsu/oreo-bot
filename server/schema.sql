@@ -288,5 +288,13 @@ ALTER TABLE guilds ADD COLUMN welcome_text_color VARCHAR(10) NOT NULL DEFAULT '#
 ALTER TABLE guilds ADD COLUMN leave_accent_color VARCHAR(10) NOT NULL DEFAULT '#e74c3c';
 ALTER TABLE guilds ADD COLUMN leave_text_color VARCHAR(10) NOT NULL DEFAULT '#e74c3c';
 
+-- ============================================================
+-- Stage 17 Migration: Voice Recognition Configuration
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN voice_rec_enabled TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE guilds ADD COLUMN voice_rec_channel_id BIGINT UNSIGNED NULL;
+ALTER TABLE guilds ADD COLUMN voice_rec_message VARCHAR(255) NOT NULL DEFAULT 'Wer hat Oreo Ban gerufen? Ab ins Gefängnis!';
+
+
 
 

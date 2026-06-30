@@ -41,6 +41,12 @@ const client = new Client({
   ],
   partials: [Partials.Message],
 });
+
+const { addSpeechEvent } = require('discord-speech-recognition');
+addSpeechEvent(client, {
+  lang: 'de-DE',
+});
+
 client.commands = new Collection(loadCommands());
 const _evtCount = loadEvents(client);
 console.log(`[startup] Registered ${_evtCount} event handler(s)`);

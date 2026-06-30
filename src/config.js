@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -495,6 +495,60 @@ async function setLeaveTextColor(guildId, color) {
   );
 }
 
+/**
+ * Liefert ob Voice Recognition aktiviert ist.
+ */
+async function getVoiceRecEnabled(guildId) {
+  const row = await readGuildRow(guildId);
+  return Boolean(row?.voice_rec_enabled);
+}
+
+/**
+ * Setzt ob Voice Recognition aktiviert ist.
+ */
+async function setVoiceRecEnabled(guildId, enabled) {
+  await getPool().execute(
+    'UPDATE guilds SET voice_rec_enabled = ? WHERE guild_id = ?',
+    [enabled ? 1 : 0, guildId]
+  );
+}
+
+/**
+ * Liefert die voice-rec-channel-ID.
+ */
+async function getVoiceRecChannelId(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.voice_rec_channel_id ? String(row.voice_rec_channel_id) : null;
+}
+
+/**
+ * Setzt die voice-rec-channel-ID.
+ */
+async function setVoiceRecChannelId(guildId, channelId) {
+  await getPool().execute(
+    'UPDATE guilds SET voice_rec_channel_id = ? WHERE guild_id = ?',
+    [channelId || null, guildId]
+  );
+}
+
+/**
+ * Liefert die Voice-Rec-Nachricht.
+ */
+async function getVoiceRecMessage(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.voice_rec_message ?? 'Wer hat Oreo Ban gerufen? Ab ins Gefängnis!';
+}
+
+/**
+ * Setzt die Voice-Rec-Nachricht.
+ */
+async function setVoiceRecMessage(guildId, message) {
+  await getPool().execute(
+    'UPDATE guilds SET voice_rec_message = ? WHERE guild_id = ?',
+    [message || 'Wer hat Oreo Ban gerufen? Ab ins Gefängnis!', guildId]
+  );
+}
+
 module.exports = {
   getModLogChannelId,
   getReportChannelId,
@@ -548,5 +602,11 @@ module.exports = {
   setLeaveAccentColor,
   getLeaveTextColor,
   setLeaveTextColor,
+  getVoiceRecEnabled,
+  setVoiceRecEnabled,
+  getVoiceRecChannelId,
+  setVoiceRecChannelId,
+  getVoiceRecMessage,
+  setVoiceRecMessage,
 };
 

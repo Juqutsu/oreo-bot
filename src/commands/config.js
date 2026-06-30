@@ -192,6 +192,15 @@ module.exports = {
           sub.setName('edit').setDescription('Öffnet ein Modal zur Konfiguration von Design, Text & Farben.')
         )
     )
+    .addSubcommandGroup((group) =>
+      group.setName('voice').setDescription('Voice-Recognition-System konfigurieren')
+        .addSubcommand((sub) =>
+          sub.setName('set').setDescription('Konfiguriert das Voice-Recognition-System.')
+            .addBooleanOption((o) => o.setName('enabled').setDescription('Aktivieren oder Deaktivieren').setRequired(false))
+            .addChannelOption((o) => o.setName('channel').setDescription('Kanal für Voice-Meldungen (Team-Chat)').setRequired(false).addChannelTypes(ChannelType.GuildText))
+            .addStringOption((o) => o.setName('message').setDescription('Der lustige Satz, der gesendet wird').setRequired(false).setMaxLength(255))
+        )
+    )
     .addSubcommand((sub) =>
       sub.setName('show').setDescription('Zeigt die komplette Server-Konfiguration.')
     ),
@@ -244,6 +253,10 @@ module.exports = {
       if (sub === 'set')  return handleLeaveSet(interaction);
       if (sub === 'test') return handleLeaveTest(interaction);
       if (sub === 'edit') return handleLeaveEdit(interaction);
+    }
+
+    if (group === 'voice') {
+      if (sub === 'set')  return handleVoiceSet(interaction);
     }
 
     if (group === null && sub === 'show') {
@@ -1167,6 +1180,13 @@ async function handleShow(interaction) {
   const leaveTextcolor = guildRow?.leave_text_color ?? '#e74c3c';
   const leaveLineShow = leaveOn ? `✅ aktiv (Msg: "${leaveMessage}", BG: ${leaveBg}, Accent: \`${leaveAccent}\`, Text: \`${leaveTextcolor}\`)` : '❌ deaktiviert';
 
+  const voiceRecOn = Boolean(guildRow?.voice_rec_enabled);
+  const voiceRecChannelId = guildRow?.voice_rec_channel_id ? String(guildRow.voice_rec_channel_id) : null;
+  const voiceRecMessage = guildRow?.voice_rec_message ?? 'Wer hat Oreo Ban gerufen? Ab ins Gefängnis!';
+  const voiceLineShow = voiceRecOn
+    ? `✅ aktiv (Kanal: ${voiceRecChannelId ? `<#${voiceRecChannelId}>` : '(nicht konfiguriert)'}, Satz: "${voiceRecMessage}")`
+    : '❌ deaktiviert';
+
   // Server Log Toggles
   const logProfileOn = Boolean(guildRow?.log_profile_enabled);
   const logJoinLeaveOn = Boolean(guildRow?.log_join_leave_enabled);
@@ -1216,7 +1236,7 @@ async function handleShow(interaction) {
     .setColor(0x5865f2)
     .addFields(
       { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}\nServer-Log: ${serverlogLine}\nWelcome-Channel: ${welcomeChannelLine}\nLeave-Channel: ${leaveChannelLine}`, inline: false },
-      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nWelcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}`,   inline: false },
+      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nWelcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}\nVoice-Recognition: ${voiceLineShow}`,   inline: false },
       { name: '📁 Server-Logs',  value: serverLogToggles, inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
@@ -1557,4 +1577,57 @@ async function handleLeaveEdit(interaction) {
   );
 
   await interaction.showModal(modal);
+}
+
+async function handleVoiceSet(interaction) {
+  const enabled = interaction.options.getBoolean('enabled');
+  const channel = interaction.options.getChannel('channel');
+  const message = interaction.options.getString('message');
+
+  if (enabled === null && channel === null && message === null) {
+    return interaction.reply({
+      content: '❌ Bitte gib mindestens eine Option an, die du konfigurieren möchtest.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const pool = getPool();
+  try {
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+  } catch (err) {
+    console.error('/config voice set DB error (init):', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const config = require('../config');
+  const updates = [];
+
+  try {
+    if (enabled !== null) {
+      await config.setVoiceRecEnabled(interaction.guildId, enabled);
+      updates.push(`Aktiviert: **${enabled ? 'Ja' : 'Nein'}**`);
+    }
+    if (channel !== null) {
+      await config.setVoiceRecChannelId(interaction.guildId, channel.id);
+      updates.push(`Kanal: <#${channel.id}>`);
+    }
+    if (message !== null) {
+      await config.setVoiceRecMessage(interaction.guildId, message);
+      updates.push(`Satz: *${message}*`);
+    }
+  } catch (err) {
+    console.error('/config voice set DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ **Voice-Recognition-System konfiguriert:**\n${updates.map((u) => `• ${u}`).join('\n')}`,
+    flags: MessageFlags.Ephemeral,
+  });
 }
