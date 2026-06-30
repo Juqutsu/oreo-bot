@@ -5,6 +5,33 @@ async function execute(oldState, newState) {
   const guildId = newState.guild.id;
 
   try {
+    // Auto-leave if bot is alone in voice channel
+    const { getVoiceConnection } = require('@discordjs/voice');
+    const connection = getVoiceConnection(guildId);
+    if (connection && connection.joinConfig.channelId) {
+      const botChannelId = connection.joinConfig.channelId;
+      const oldChannelId = oldState.channelId;
+      const newChannelId = newState.channelId;
+      
+      if (oldChannelId === botChannelId && oldChannelId !== newChannelId) {
+        const botChannel = await newState.guild.channels.fetch(botChannelId).catch(() => null);
+        if (botChannel) {
+          const humans = botChannel.members.filter(m => !m.user.bot);
+          if (humans.size === 0) {
+            connection.destroy();
+            console.log(`[voice-rec] Left voice channel ${botChannel.name} because it is empty.`);
+            const voiceRecChannelId = await config.getVoiceRecChannelId(guildId);
+            if (voiceRecChannelId) {
+              const textChannel = await newState.guild.channels.fetch(voiceRecChannelId).catch(() => null);
+              if (textChannel) {
+                await textChannel.send(`🐕 **Oreo Auto-Standby:** Ich habe den Voice-Kanal **${botChannel.name}** verlassen, da keine Personen mehr anwesend waren.`);
+              }
+            }
+          }
+        }
+      }
+    }
+
     const isVoiceEnabled = await config.isLogVoiceEnabled(guildId);
     if (!isVoiceEnabled) return;
 

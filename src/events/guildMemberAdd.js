@@ -2,10 +2,71 @@ const { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = r
 const config = require('../config');
 const { formatDuration } = require('../duration');
 
+// Anti-Raid State
+const joinTracker = new Map();
+const raidStatus = new Map();
+const RAID_THRESHOLD_COUNT = 5;
+const RAID_THRESHOLD_SECONDS = 10;
+const RAID_COOLDOWN_MS = 15 * 60 * 1000;
+
 async function execute(member) {
   if (member.user.bot) return;
 
   const guildId = member.guild.id;
+
+  // Anti-Raid Join Speed Check
+  let isRaidActive = false;
+  try {
+    const now = Date.now();
+    
+    // Clean up expired panic mode
+    const currentRaid = raidStatus.get(guildId);
+    if (currentRaid && currentRaid.active && now > currentRaid.expiresAt) {
+      raidStatus.set(guildId, { active: false, expiresAt: 0 });
+      console.log(`[anti-raid] Panic mode expired for guild ${guildId}`);
+    }
+
+    if (!joinTracker.has(guildId)) {
+      joinTracker.set(guildId, []);
+    }
+    const joins = joinTracker.get(guildId);
+    joins.push(now);
+
+    const windowStart = now - (RAID_THRESHOLD_SECONDS * 1000);
+    const recentJoins = joins.filter(t => t >= windowStart);
+    joinTracker.set(guildId, recentJoins);
+
+    if (recentJoins.length >= RAID_THRESHOLD_COUNT) {
+      const wasActive = raidStatus.get(guildId)?.active;
+      if (!wasActive) {
+        raidStatus.set(guildId, { active: true, expiresAt: now + RAID_COOLDOWN_MS });
+        
+        // Alert moderators
+        const logChannelId = await config.getModLogChannelId(guildId);
+        if (logChannelId) {
+          const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
+          if (logChannel) {
+            const embed = new EmbedBuilder()
+              .setTitle('🚨 RAID-ALARM FEUERT!')
+              .setColor(0xed4245)
+              .setDescription(`Es wurden **${recentJoins.length} Beitritte in weniger als ${RAID_THRESHOLD_SECONDS} Sekunden** erkannt!`)
+              .addFields(
+                { name: '🔥 Status', value: 'Server befindet sich im **Panik-Modus (15 Minuten)**.', inline: true },
+                { name: '🔒 Schutzmaßnahme', value: 'Captcha-Verifizierung wird temporär für ALLE neuen User erzwungen.', inline: true }
+              )
+              .setTimestamp()
+              .setFooter({ text: '🐾 Oreo Anti-Raid' });
+            await logChannel.send({ content: '@here 🚨 **Möglicher Raid erkannt!**', embeds: [embed] }).catch(() => null);
+          }
+        }
+      }
+      isRaidActive = true;
+    } else {
+      isRaidActive = raidStatus.get(guildId)?.active ?? false;
+    }
+  } catch (err) {
+    console.error('[anti-raid] Join speed check failed:', err);
+  }
 
   try {
     const minDays = await config.getMinAccountAgeDays(guildId);
@@ -41,7 +102,7 @@ async function execute(member) {
   }
 
   try {
-    const captchaEnabled = await config.getCaptchaEnabled(guildId);
+    const captchaEnabled = (await config.getCaptchaEnabled(guildId)) || isRaidActive;
     if (captchaEnabled) {
       const captchaChannelId = await config.getCaptchaChannelId(guildId);
       const everyone = member.guild.roles.everyone;
@@ -54,7 +115,7 @@ async function execute(member) {
         if (verifyChannel) {
           // Welcome member in DMs and point to verify channel
           await member.send({
-            content: `Willkommen auf **${member.guild.name}**! Bitte verifiziere dich im Kanal <#${captchaChannelId}>, um vollen Zugriff auf den Server zu erhalten.`
+            content: `Willkommen auf **${member.guild.name}**! Bitte verifiziere dich im kanal <#${captchaChannelId}>, um vollen Zugriff auf den Server zu erhalten.`
           }).catch(() => {});
         }
       }
@@ -83,10 +144,14 @@ async function execute(member) {
           reason: 'Oreo Captcha-Verifizierung Setup',
         });
 
+        const descriptionText = isRaidActive
+          ? `⚠️ **SICHERHEITS-PANIKMODUS AKTIV!**\n\nAufgrund von verdächtigen Beitrittswellen wurde für **${member.guild.name}** die Captcha-Verifizierung temporär für alle neuen User aktiviert.\n\nBitte klicke auf den Button unten, um dich zu verifizieren!`
+          : `Willkommen auf **${member.guild.name}**, <@${member.user.id}>!\n\nUm den Server freizuschalten, musst du dich verifizieren.\n\nKlicke auf den Button unten, um das Captcha zu starten.`;
+
         const embed = new EmbedBuilder()
           .setTitle('🔐 Server-Verifizierung')
           .setColor(0x3498db)
-          .setDescription(`Willkommen auf **${member.guild.name}**, <@${member.user.id}>!\n\nUm den Server freizuschalten, musst du dich verifizieren.\n\nKlicke auf den Button unten, um das Captcha zu starten.`)
+          .setDescription(descriptionText)
           .setFooter({ text: '🐾 Oreo • Verifizierung' })
           .setTimestamp();
 

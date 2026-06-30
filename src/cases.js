@@ -42,6 +42,26 @@ async function createCase({
       [guildId, caseNumber, userId, moderatorId, type, source, reason, durationMs, expiresAt, active],
     );
 
+    // 5. Cross-Bot economy penalty (Ramen & Oreo synergy)
+    let penalty = 0;
+    if (type === 'warn') {
+      penalty = 250;
+    } else if (type === 'timeout' || type === 'mute') {
+      penalty = 500;
+    } else if (type === 'kick' || type === 'ban' || type === 'softban') {
+      penalty = 1000;
+    }
+
+    if (penalty > 0) {
+      await conn.execute(
+        `UPDATE guild_users 
+         SET currency = IF(currency >= ?, currency - ?, 0) 
+         WHERE guild_id = ? AND user_id = ?`,
+        [penalty, penalty, guildId, userId]
+      );
+      console.log(`[synergy] Deducted ${penalty} Ramen coins from user ${userId} on guild ${guildId} due to infraction: ${type}`);
+    }
+
     await conn.commit();
     return { caseNumber, infractionId: result.insertId };
   } catch (err) {
