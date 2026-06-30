@@ -29,5 +29,9 @@
     "discord.js": "^14.26.4",
     "libsodium-wrappers": "^0.8.4",
     "mysql2": "^3.11.5"
+  },
+  "devDependencies": {
+    "@emnapi/core": "1.11.1",
+    "@emnapi/runtime": "1.11.1"
   }
 }
