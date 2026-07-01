@@ -50,6 +50,9 @@ async function handleWelcomeModalSubmit(interaction) {
   try {
     if (message) await config.setWelcomeMessage(interaction.guildId, message);
     await config.setWelcomeBgUrl(interaction.guildId, cleanBg);
+    if (cleanBg) {
+      await config.setWelcomeBannerEnabled(interaction.guildId, true);
+    }
     if (accent) await config.setWelcomeAccentColor(interaction.guildId, accent);
     if (textcolor) await config.setWelcomeTextColor(interaction.guildId, textcolor);
     await config.setWelcomeBannerText(interaction.guildId, bannerText);
@@ -106,6 +109,9 @@ async function handleLeaveModalSubmit(interaction) {
   try {
     if (message) await config.setLeaveMessage(interaction.guildId, message);
     await config.setLeaveBgUrl(interaction.guildId, cleanBg);
+    if (cleanBg) {
+      await config.setLeaveBannerEnabled(interaction.guildId, true);
+    }
     if (accent) await config.setLeaveAccentColor(interaction.guildId, accent);
     if (textcolor) await config.setLeaveTextColor(interaction.guildId, textcolor);
     await config.setLeaveBannerText(interaction.guildId, bannerText);
