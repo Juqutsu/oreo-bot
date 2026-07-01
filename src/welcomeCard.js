@@ -1,4 +1,14 @@
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const path = require('node:path');
+const fs = require('node:fs');
+
+// Register Inter font for robust rendering across all environments (including Alpine Docker)
+const fontPath = path.join(__dirname, '..', 'assets', 'fonts', 'Inter.ttf');
+if (fs.existsSync(fontPath)) {
+  GlobalFonts.registerFromPath(fontPath, 'Inter');
+} else {
+  console.warn(`[welcome-card] Inter font not found at ${fontPath}. Falling back to system fonts.`);
+}
 
 /**
  * Helper to convert hex colors to RGBA.
@@ -190,7 +200,7 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   ctx.textAlign = 'center';
   
   // Header text
-  ctx.font = 'bold 20px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  ctx.font = 'bold 20px "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
   ctx.fillStyle = textColor;
   let bannerTextTemplate = type === 'welcome' ? 'WILLKOMMEN' : 'AUF WIEDERSEHEN';
   try {
@@ -202,7 +212,7 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   } catch (err) {
     console.warn('[welcome-card] Failed to load custom banner text:', err.message);
   }
-  const humanMemberCount = guild.members.cache.filter(m => !m.user.bot).size;
+  const humanMemberCount = guild.memberCount;
   const bannerText = bannerTextTemplate
     .replace(/{username}/g, user.username)
     .replace(/{server}/g, guild.name)
@@ -210,7 +220,7 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   ctx.fillText(bannerText, avatarX, 230);
 
   // Username text
-  ctx.font = 'bold 36px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  ctx.font = 'bold 36px "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
   ctx.fillStyle = '#ffffff';
   
   // Measure text to fit long names nicely
@@ -227,7 +237,7 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   ctx.fillText(username, avatarX, 285);
 
   // Subtext / Member count
-  ctx.font = '500 16px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  ctx.font = '500 16px "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
   ctx.fillStyle = '#b9bbbe';
   let subtext = '';
   if (type === 'welcome') {
@@ -239,7 +249,7 @@ async function generateCard(user, guild, type, customBgUrl = null) {
 
   // Watermark/Brand bottom right
   ctx.textAlign = 'right';
-  ctx.font = 'bold 12px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  ctx.font = 'bold 12px "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
   ctx.fillText('HOME', 750, 364);
 
@@ -254,7 +264,7 @@ async function generateCard(user, guild, type, customBgUrl = null) {
  * @returns {string} The formatted message
  */
 function formatWelcomeMessage(template, member) {
-  const humanMemberCount = member.guild.members.cache.filter(m => !m.user.bot).size;
+  const humanMemberCount = member.guild.memberCount;
   return template
     .replace(/{user}/g, `<@${member.id}>`)
     .replace(/{username}/g, member.user.username)
