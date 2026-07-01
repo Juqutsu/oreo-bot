@@ -170,6 +170,8 @@ module.exports = {
             .addStringOption((o) => o.setName('background').setDescription('Bild-URL für den Karten-Hintergrund (oder "none" zum Löschen)').setRequired(false).setMaxLength(512))
             .addBooleanOption((o) => o.setName('banner').setDescription('Banner-Bild mitsenden (Ja/Nein)').setRequired(false))
             .addStringOption((o) => o.setName('bannertext').setDescription('Text auf dem Banner (z.B. Willkommen!)').setRequired(false).setMaxLength(64))
+            .addStringOption((o) => o.setName('accent').setDescription('Akzentfarbe (z.B. #5865f2)').setRequired(false).setMaxLength(7))
+            .addStringOption((o) => o.setName('textcolor').setDescription('Textfarbe (z.B. #7289da)').setRequired(false).setMaxLength(7))
         )
         .addSubcommand((sub) =>
           sub.setName('test').setDescription('Generiert und sendet eine Test-Willkommenskarte.')
@@ -188,6 +190,8 @@ module.exports = {
             .addStringOption((o) => o.setName('background').setDescription('Bild-URL für den Karten-Hintergrund (oder "none" zum Löschen)').setRequired(false).setMaxLength(512))
             .addBooleanOption((o) => o.setName('banner').setDescription('Banner-Bild mitsenden (Ja/Nein)').setRequired(false))
             .addStringOption((o) => o.setName('bannertext').setDescription('Text auf dem Banner (z.B. Ciao!)').setRequired(false).setMaxLength(64))
+            .addStringOption((o) => o.setName('accent').setDescription('Akzentfarbe (z.B. #e74c3c)').setRequired(false).setMaxLength(7))
+            .addStringOption((o) => o.setName('textcolor').setDescription('Textfarbe (z.B. #e74c3c)').setRequired(false).setMaxLength(7))
         )
         .addSubcommand((sub) =>
           sub.setName('test').setDescription('Generiert und sendet eine Test-Leave-Karte.')
@@ -1262,10 +1266,28 @@ async function handleWelcomeSet(interaction) {
   const background = interaction.options.getString('background');
   const banner = interaction.options.getBoolean('banner');
   const bannertext = interaction.options.getString('bannertext');
+  const accent = interaction.options.getString('accent');
+  const textcolor = interaction.options.getString('textcolor');
 
-  if (enabled === null && channel === null && message === null && background === null && banner === null && bannertext === null) {
+  if (enabled === null && channel === null && message === null && background === null && banner === null && bannertext === null && accent === null && textcolor === null) {
     return interaction.reply({
       content: '❌ Bitte gib mindestens eine Option an, die du konfigurieren möchtest.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // Validate hex colors
+  const HEX_COLOR_REGEX = /^#[0-9A-F]{6}$/i;
+  if (accent && !HEX_COLOR_REGEX.test(accent)) {
+    return interaction.reply({
+      content: '❌ Die Akzentfarbe muss ein gültiger Hex-Code sein (z.B. `#5865f2`).',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (textcolor && !HEX_COLOR_REGEX.test(textcolor)) {
+    return interaction.reply({
+      content: '❌ Die Textfarbe muss ein gültiger Hex-Code sein (z.B. `#7289da`).',
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -1309,6 +1331,14 @@ async function handleWelcomeSet(interaction) {
     if (bannertext !== null) {
       await config.setWelcomeBannerText(interaction.guildId, bannertext);
       updates.push(`Banner-Text: *${bannertext}*`);
+    }
+    if (accent !== null) {
+      await config.setWelcomeAccentColor(interaction.guildId, accent);
+      updates.push(`Akzentfarbe: \`${accent}\``);
+    }
+    if (textcolor !== null) {
+      await config.setWelcomeTextColor(interaction.guildId, textcolor);
+      updates.push(`Textfarbe: \`${textcolor}\``);
     }
   } catch (err) {
     console.error('/config welcome set DB error:', err);
@@ -1379,10 +1409,28 @@ async function handleLeaveSet(interaction) {
   const background = interaction.options.getString('background');
   const banner = interaction.options.getBoolean('banner');
   const bannertext = interaction.options.getString('bannertext');
+  const accent = interaction.options.getString('accent');
+  const textcolor = interaction.options.getString('textcolor');
 
-  if (enabled === null && channel === null && message === null && background === null && banner === null && bannertext === null) {
+  if (enabled === null && channel === null && message === null && background === null && banner === null && bannertext === null && accent === null && textcolor === null) {
     return interaction.reply({
       content: '❌ Bitte gib mindestens eine Option an, die du konfigurieren möchtest.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // Validate hex colors
+  const HEX_COLOR_REGEX = /^#[0-9A-F]{6}$/i;
+  if (accent && !HEX_COLOR_REGEX.test(accent)) {
+    return interaction.reply({
+      content: '❌ Die Akzentfarbe muss ein gültiger Hex-Code sein (z.B. `#e74c3c`).',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (textcolor && !HEX_COLOR_REGEX.test(textcolor)) {
+    return interaction.reply({
+      content: '❌ Die Textfarbe muss ein gültiger Hex-Code sein (z.B. `#e74c3c`).',
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -1426,6 +1474,14 @@ async function handleLeaveSet(interaction) {
     if (bannertext !== null) {
       await config.setLeaveBannerText(interaction.guildId, bannertext);
       updates.push(`Banner-Text: *${bannertext}*`);
+    }
+    if (accent !== null) {
+      await config.setLeaveAccentColor(interaction.guildId, accent);
+      updates.push(`Akzentfarbe: \`${accent}\``);
+    }
+    if (textcolor !== null) {
+      await config.setLeaveTextColor(interaction.guildId, textcolor);
+      updates.push(`Textfarbe: \`${textcolor}\``);
     }
   } catch (err) {
     console.error('/config leave set DB error:', err);
