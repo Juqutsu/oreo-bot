@@ -45,7 +45,7 @@ async function execute(member) {
           const bannerEnabled = await config.isLeaveBannerEnabled(guildId);
 
           const { formatWelcomeMessage } = require('../welcomeCard');
-          const messageText = formatWelcomeMessage(leaveMessageTemplate, member);
+          const messageText = await formatWelcomeMessage(leaveMessageTemplate, member);
 
           const sendPayload = { content: messageText };
 

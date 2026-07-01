@@ -212,7 +212,13 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   } catch (err) {
     console.warn('[welcome-card] Failed to load custom banner text:', err.message);
   }
-  const humanMemberCount = guild.memberCount;
+  let humanMemberCount = guild.memberCount;
+  try {
+    const members = await guild.members.fetch();
+    humanMemberCount = members.filter(m => !m.user.bot).size;
+  } catch (err) {
+    console.warn('[welcome-card] Failed to fetch guild members, falling back to total memberCount:', err.message);
+  }
   const bannerText = bannerTextTemplate
     .replace(/{username}/g, user.username)
     .replace(/{server}/g, guild.name)
@@ -263,8 +269,14 @@ async function generateCard(user, guild, type, customBgUrl = null) {
  * @param {import('discord.js').GuildMember} member The member object
  * @returns {string} The formatted message
  */
-function formatWelcomeMessage(template, member) {
-  const humanMemberCount = member.guild.memberCount;
+async function formatWelcomeMessage(template, member) {
+  let humanMemberCount = member.guild.memberCount;
+  try {
+    const members = await member.guild.members.fetch();
+    humanMemberCount = members.filter(m => !m.user.bot).size;
+  } catch (err) {
+    console.warn('[welcome-card] Failed to fetch guild members for message formatting:', err.message);
+  }
   return template
     .replace(/{user}/g, `<@${member.id}>`)
     .replace(/{username}/g, member.user.username)

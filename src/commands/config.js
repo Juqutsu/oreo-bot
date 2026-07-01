@@ -1364,7 +1364,7 @@ async function handleWelcomeTest(interaction) {
     const bannerEnabled = await config.isWelcomeBannerEnabled(interaction.guildId);
 
     const { formatWelcomeMessage } = require('../welcomeCard');
-    const messageText = formatWelcomeMessage(welcomeMessageTemplate, interaction.member);
+    const messageText = await formatWelcomeMessage(welcomeMessageTemplate, interaction.member);
 
     const sendPayload = { content: messageText };
     const replyFiles = [];
@@ -1507,7 +1507,7 @@ async function handleLeaveTest(interaction) {
     const bannerEnabled = await config.isLeaveBannerEnabled(interaction.guildId);
 
     const { formatWelcomeMessage } = require('../welcomeCard');
-    const messageText = formatWelcomeMessage(leaveMessageTemplate, interaction.member);
+    const messageText = await formatWelcomeMessage(leaveMessageTemplate, interaction.member);
 
     const sendPayload = { content: messageText };
     const replyFiles = [];

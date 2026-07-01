@@ -275,7 +275,7 @@ async function execute(member) {
           const bannerEnabled = await config.isWelcomeBannerEnabled(guildId);
 
           const { formatWelcomeMessage } = require('../welcomeCard');
-          const messageText = formatWelcomeMessage(welcomeMessageTemplate, member);
+          const messageText = await formatWelcomeMessage(welcomeMessageTemplate, member);
 
           const sendPayload = { content: messageText };
 
