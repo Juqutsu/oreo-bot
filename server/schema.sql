@@ -301,6 +301,13 @@ ALTER TABLE guilds ADD COLUMN voice_rec_message VARCHAR(255) NOT NULL DEFAULT 'W
 ALTER TABLE guilds ADD COLUMN welcome_banner_enabled TINYINT(1) NOT NULL DEFAULT 1;
 ALTER TABLE guilds ADD COLUMN leave_banner_enabled TINYINT(1) NOT NULL DEFAULT 1;
 
+-- ============================================================
+-- Stage 19 Migration: Welcome & Leave Banner Custom Text
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN welcome_banner_text VARCHAR(64) NOT NULL DEFAULT 'WILLKOMMEN';
+ALTER TABLE guilds ADD COLUMN leave_banner_text VARCHAR(64) NOT NULL DEFAULT 'AUF WIEDERSEHEN';
+
+
 
 
 

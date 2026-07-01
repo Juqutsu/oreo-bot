@@ -192,7 +192,21 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   // Header text
   ctx.font = 'bold 20px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
   ctx.fillStyle = textColor;
-  ctx.fillText(type === 'welcome' ? 'WILLKOMMEN' : 'AUF WIEDERSEHEN', avatarX, 230);
+  let bannerTextTemplate = type === 'welcome' ? 'WILLKOMMEN' : 'AUF WIEDERSEHEN';
+  try {
+    if (type === 'welcome') {
+      bannerTextTemplate = await config.getWelcomeBannerText(guild.id);
+    } else {
+      bannerTextTemplate = await config.getLeaveBannerText(guild.id);
+    }
+  } catch (err) {
+    console.warn('[welcome-card] Failed to load custom banner text:', err.message);
+  }
+  const bannerText = bannerTextTemplate
+    .replace(/{username}/g, user.username)
+    .replace(/{server}/g, guild.name)
+    .replace(/{memberCount}/g, guild.memberCount);
+  ctx.fillText(bannerText, avatarX, 230);
 
   // Username text
   ctx.font = 'bold 36px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';

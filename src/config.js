@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message, welcome_banner_enabled, leave_banner_enabled FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message, welcome_banner_enabled, leave_banner_enabled, welcome_banner_text, leave_banner_text FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -532,6 +532,42 @@ async function setLeaveBannerEnabled(guildId, enabled) {
 }
 
 /**
+ * Liefert den Welcome-Banner-Text.
+ */
+async function getWelcomeBannerText(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.welcome_banner_text ?? 'WILLKOMMEN';
+}
+
+/**
+ * Setzt den Welcome-Banner-Text.
+ */
+async function setWelcomeBannerText(guildId, text) {
+  await getPool().execute(
+    'UPDATE guilds SET welcome_banner_text = ? WHERE guild_id = ?',
+    [text || 'WILLKOMMEN', guildId]
+  );
+}
+
+/**
+ * Liefert den Leave-Banner-Text.
+ */
+async function getLeaveBannerText(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.leave_banner_text ?? 'AUF WIEDERSEHEN';
+}
+
+/**
+ * Setzt den Leave-Banner-Text.
+ */
+async function setLeaveBannerText(guildId, text) {
+  await getPool().execute(
+    'UPDATE guilds SET leave_banner_text = ? WHERE guild_id = ?',
+    [text || 'AUF WIEDERSEHEN', guildId]
+  );
+}
+
+/**
  * Liefert ob Voice Recognition aktiviert ist.
  */
 async function getVoiceRecEnabled(guildId) {
@@ -648,5 +684,9 @@ module.exports = {
   setWelcomeBannerEnabled,
   isLeaveBannerEnabled,
   setLeaveBannerEnabled,
+  getWelcomeBannerText,
+  setWelcomeBannerText,
+  getLeaveBannerText,
+  setLeaveBannerText,
 };
 
