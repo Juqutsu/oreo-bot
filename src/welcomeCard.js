@@ -202,10 +202,11 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   } catch (err) {
     console.warn('[welcome-card] Failed to load custom banner text:', err.message);
   }
+  const humanMemberCount = guild.members.cache.filter(m => !m.user.bot).size;
   const bannerText = bannerTextTemplate
     .replace(/{username}/g, user.username)
     .replace(/{server}/g, guild.name)
-    .replace(/{memberCount}/g, guild.memberCount);
+    .replace(/{memberCount}/g, humanMemberCount);
   ctx.fillText(bannerText, avatarX, 230);
 
   // Username text
@@ -230,9 +231,9 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   ctx.fillStyle = '#b9bbbe';
   let subtext = '';
   if (type === 'welcome') {
-    subtext = `Du bist unser ${guild.memberCount}. Mitglied!`;
+    subtext = `Du bist unser ${humanMemberCount}. Mitglied!`;
   } else {
-    subtext = `Wir haben jetzt ${guild.memberCount} Mitglieder.`;
+    subtext = `Wir haben jetzt ${humanMemberCount} Mitglieder.`;
   }
   ctx.fillText(subtext, avatarX, 330);
 
@@ -253,11 +254,12 @@ async function generateCard(user, guild, type, customBgUrl = null) {
  * @returns {string} The formatted message
  */
 function formatWelcomeMessage(template, member) {
+  const humanMemberCount = member.guild.members.cache.filter(m => !m.user.bot).size;
   return template
     .replace(/{user}/g, `<@${member.id}>`)
     .replace(/{username}/g, member.user.username)
     .replace(/{server}/g, member.guild.name)
-    .replace(/{memberCount}/g, member.guild.memberCount);
+    .replace(/{memberCount}/g, humanMemberCount);
 }
 
 module.exports = { generateCard, formatWelcomeMessage };
