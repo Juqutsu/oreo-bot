@@ -272,15 +272,22 @@ async function execute(member) {
         if (welcomeChannel) {
           const welcomeMessageTemplate = await config.getWelcomeMessage(guildId);
           const bgUrl = await config.getWelcomeBgUrl(guildId);
+          const bannerEnabled = await config.isWelcomeBannerEnabled(guildId);
 
-          const { generateCard, formatWelcomeMessage } = require('../welcomeCard');
-          const cardBuffer = await generateCard(member.user, member.guild, 'welcome', bgUrl);
-
-          const { AttachmentBuilder } = require('discord.js');
-          const attachment = new AttachmentBuilder(cardBuffer, { name: 'welcome.png' });
+          const { formatWelcomeMessage } = require('../welcomeCard');
           const messageText = formatWelcomeMessage(welcomeMessageTemplate, member);
 
-          await welcomeChannel.send({ content: messageText, files: [attachment] });
+          const sendPayload = { content: messageText };
+
+          if (bannerEnabled) {
+            const { generateCard } = require('../welcomeCard');
+            const cardBuffer = await generateCard(member.user, member.guild, 'welcome', bgUrl);
+            const { AttachmentBuilder } = require('discord.js');
+            const attachment = new AttachmentBuilder(cardBuffer, { name: 'welcome.png' });
+            sendPayload.files = [attachment];
+          }
+
+          await welcomeChannel.send(sendPayload);
         }
       }
     }

@@ -42,15 +42,22 @@ async function execute(member) {
         if (leaveChannel) {
           const leaveMessageTemplate = await config.getLeaveMessage(guildId);
           const bgUrl = await config.getLeaveBgUrl(guildId);
+          const bannerEnabled = await config.isLeaveBannerEnabled(guildId);
 
-          const { generateCard, formatWelcomeMessage } = require('../welcomeCard');
-          const cardBuffer = await generateCard(member.user, member.guild, 'leave', bgUrl);
-
-          const { AttachmentBuilder } = require('discord.js');
-          const attachment = new AttachmentBuilder(cardBuffer, { name: 'leave.png' });
+          const { formatWelcomeMessage } = require('../welcomeCard');
           const messageText = formatWelcomeMessage(leaveMessageTemplate, member);
 
-          await leaveChannel.send({ content: messageText, files: [attachment] });
+          const sendPayload = { content: messageText };
+
+          if (bannerEnabled) {
+            const { generateCard } = require('../welcomeCard');
+            const cardBuffer = await generateCard(member.user, member.guild, 'leave', bgUrl);
+            const { AttachmentBuilder } = require('discord.js');
+            const attachment = new AttachmentBuilder(cardBuffer, { name: 'leave.png' });
+            sendPayload.files = [attachment];
+          }
+
+          await leaveChannel.send(sendPayload);
         }
       }
     }

@@ -168,6 +168,7 @@ module.exports = {
             .addChannelOption((o) => o.setName('channel').setDescription('Kanal für Willkommenskarten').setRequired(false).addChannelTypes(ChannelType.GuildText))
             .addStringOption((o) => o.setName('message').setDescription('Nachrichtentext (Platzhalter: {user}, {username}, {server}, {memberCount})').setRequired(false).setMaxLength(255))
             .addStringOption((o) => o.setName('background').setDescription('Bild-URL für den Karten-Hintergrund (oder "none" zum Löschen)').setRequired(false).setMaxLength(512))
+            .addBooleanOption((o) => o.setName('banner').setDescription('Banner-Bild mitsenden (Ja/Nein)').setRequired(false))
         )
         .addSubcommand((sub) =>
           sub.setName('test').setDescription('Generiert und sendet eine Test-Willkommenskarte.')
@@ -184,6 +185,7 @@ module.exports = {
             .addChannelOption((o) => o.setName('channel').setDescription('Kanal für Leave-Karten').setRequired(false).addChannelTypes(ChannelType.GuildText))
             .addStringOption((o) => o.setName('message').setDescription('Nachrichtentext (Platzhalter: {user}, {username}, {server}, {memberCount})').setRequired(false).setMaxLength(255))
             .addStringOption((o) => o.setName('background').setDescription('Bild-URL für den Karten-Hintergrund (oder "none" zum Löschen)').setRequired(false).setMaxLength(512))
+            .addBooleanOption((o) => o.setName('banner').setDescription('Banner-Bild mitsenden (Ja/Nein)').setRequired(false))
         )
         .addSubcommand((sub) =>
           sub.setName('test').setDescription('Generiert und sendet eine Test-Leave-Karte.')
@@ -1171,14 +1173,16 @@ async function handleShow(interaction) {
   const welcomeBg = guildRow?.welcome_bg_url ? `[Link](${guildRow.welcome_bg_url})` : 'Standard';
   const welcomeAccent = guildRow?.welcome_accent_color ?? '#5865f2';
   const welcomeTextcolor = guildRow?.welcome_text_color ?? '#7289da';
-  const welcomeLineShow = welcomeOn ? `✅ aktiv (Msg: "${welcomeMessage}", BG: ${welcomeBg}, Accent: \`${welcomeAccent}\`, Text: \`${welcomeTextcolor}\`)` : '❌ deaktiviert';
+  const welcomeBannerEnabled = guildRow?.welcome_banner_enabled !== 0;
+  const welcomeLineShow = welcomeOn ? `✅ aktiv (Msg: "${welcomeMessage}", Banner: ${welcomeBannerEnabled ? 'Ja' : 'Nein'}, BG: ${welcomeBg}, Accent: \`${welcomeAccent}\`, Text: \`${welcomeTextcolor}\`)` : '❌ deaktiviert';
 
   const leaveOn = Boolean(guildRow?.leave_enabled);
   const leaveMessage = guildRow?.leave_message ?? '{user} hat den Server verlassen.';
   const leaveBg = guildRow?.leave_bg_url ? `[Link](${guildRow.leave_bg_url})` : 'Standard';
   const leaveAccent = guildRow?.leave_accent_color ?? '#e74c3c';
   const leaveTextcolor = guildRow?.leave_text_color ?? '#e74c3c';
-  const leaveLineShow = leaveOn ? `✅ aktiv (Msg: "${leaveMessage}", BG: ${leaveBg}, Accent: \`${leaveAccent}\`, Text: \`${leaveTextcolor}\`)` : '❌ deaktiviert';
+  const leaveBannerEnabled = guildRow?.leave_banner_enabled !== 0;
+  const leaveLineShow = leaveOn ? `✅ aktiv (Msg: "${leaveMessage}", Banner: ${leaveBannerEnabled ? 'Ja' : 'Nein'}, BG: ${leaveBg}, Accent: \`${leaveAccent}\`, Text: \`${leaveTextcolor}\`)` : '❌ deaktiviert';
 
   const voiceRecOn = Boolean(guildRow?.voice_rec_enabled);
   const voiceRecChannelId = guildRow?.voice_rec_channel_id ? String(guildRow.voice_rec_channel_id) : null;
@@ -1252,8 +1256,9 @@ async function handleWelcomeSet(interaction) {
   const channel = interaction.options.getChannel('channel');
   const message = interaction.options.getString('message');
   const background = interaction.options.getString('background');
+  const banner = interaction.options.getBoolean('banner');
 
-  if (enabled === null && channel === null && message === null && background === null) {
+  if (enabled === null && channel === null && message === null && background === null && banner === null) {
     return interaction.reply({
       content: '❌ Bitte gib mindestens eine Option an, die du konfigurieren möchtest.',
       flags: MessageFlags.Ephemeral,
@@ -1292,6 +1297,10 @@ async function handleWelcomeSet(interaction) {
       await config.setWelcomeBgUrl(interaction.guildId, cleanBg);
       updates.push(`Hintergrund: ${cleanBg ? `[Link](${cleanBg})` : 'Standard-Verlauf'}`);
     }
+    if (banner !== null) {
+      await config.setWelcomeBannerEnabled(interaction.guildId, banner);
+      updates.push(`Banner mitsenden: **${banner ? 'Ja' : 'Nein'}**`);
+    }
   } catch (err) {
     console.error('/config welcome set DB error:', err);
     return interaction.reply({
@@ -1313,13 +1322,22 @@ async function handleWelcomeTest(interaction) {
     const channelId = await config.getWelcomeChannelId(interaction.guildId);
     const welcomeMessageTemplate = await config.getWelcomeMessage(interaction.guildId);
     const bgUrl = await config.getWelcomeBgUrl(interaction.guildId);
+    const bannerEnabled = await config.isWelcomeBannerEnabled(interaction.guildId);
 
-    const { generateCard, formatWelcomeMessage } = require('../welcomeCard');
-    const cardBuffer = await generateCard(interaction.user, interaction.guild, 'welcome', bgUrl);
-
-    const { AttachmentBuilder } = require('discord.js');
-    const attachment = new AttachmentBuilder(cardBuffer, { name: 'welcome.png' });
+    const { formatWelcomeMessage } = require('../welcomeCard');
     const messageText = formatWelcomeMessage(welcomeMessageTemplate, interaction.member);
+
+    const sendPayload = { content: messageText };
+    const replyFiles = [];
+
+    if (bannerEnabled) {
+      const { generateCard } = require('../welcomeCard');
+      const cardBuffer = await generateCard(interaction.user, interaction.guild, 'welcome', bgUrl);
+      const { AttachmentBuilder } = require('discord.js');
+      const attachment = new AttachmentBuilder(cardBuffer, { name: 'welcome.png' });
+      sendPayload.files = [attachment];
+      replyFiles.push(attachment);
+    }
 
     let targetChannel = null;
     if (channelId) {
@@ -1327,14 +1345,14 @@ async function handleWelcomeTest(interaction) {
     }
 
     if (targetChannel) {
-      await targetChannel.send({ content: messageText, files: [attachment] });
+      await targetChannel.send(sendPayload);
       return interaction.editReply({
         content: `✅ Test-Willkommenskarte wurde in <#${channelId}> gesendet.`,
       });
     } else {
       return interaction.editReply({
         content: `ℹ️ Kein Willkommenskanal konfiguriert. Hier ist eine Vorschau:\n**Text:** ${messageText}`,
-        files: [attachment],
+        files: replyFiles,
       });
     }
   } catch (err) {
@@ -1350,8 +1368,9 @@ async function handleLeaveSet(interaction) {
   const channel = interaction.options.getChannel('channel');
   const message = interaction.options.getString('message');
   const background = interaction.options.getString('background');
+  const banner = interaction.options.getBoolean('banner');
 
-  if (enabled === null && channel === null && message === null && background === null) {
+  if (enabled === null && channel === null && message === null && background === null && banner === null) {
     return interaction.reply({
       content: '❌ Bitte gib mindestens eine Option an, die du konfigurieren möchtest.',
       flags: MessageFlags.Ephemeral,
@@ -1390,6 +1409,10 @@ async function handleLeaveSet(interaction) {
       await config.setLeaveBgUrl(interaction.guildId, cleanBg);
       updates.push(`Hintergrund: ${cleanBg ? `[Link](${cleanBg})` : 'Standard-Verlauf'}`);
     }
+    if (banner !== null) {
+      await config.setLeaveBannerEnabled(interaction.guildId, banner);
+      updates.push(`Banner mitsenden: **${banner ? 'Ja' : 'Nein'}**`);
+    }
   } catch (err) {
     console.error('/config leave set DB error:', err);
     return interaction.reply({
@@ -1411,13 +1434,22 @@ async function handleLeaveTest(interaction) {
     const channelId = await config.getLeaveChannelId(interaction.guildId);
     const leaveMessageTemplate = await config.getLeaveMessage(interaction.guildId);
     const bgUrl = await config.getLeaveBgUrl(interaction.guildId);
+    const bannerEnabled = await config.isLeaveBannerEnabled(interaction.guildId);
 
-    const { generateCard, formatWelcomeMessage } = require('../welcomeCard');
-    const cardBuffer = await generateCard(interaction.user, interaction.guild, 'leave', bgUrl);
-
-    const { AttachmentBuilder } = require('discord.js');
-    const attachment = new AttachmentBuilder(cardBuffer, { name: 'leave.png' });
+    const { formatWelcomeMessage } = require('../welcomeCard');
     const messageText = formatWelcomeMessage(leaveMessageTemplate, interaction.member);
+
+    const sendPayload = { content: messageText };
+    const replyFiles = [];
+
+    if (bannerEnabled) {
+      const { generateCard } = require('../welcomeCard');
+      const cardBuffer = await generateCard(interaction.user, interaction.guild, 'leave', bgUrl);
+      const { AttachmentBuilder } = require('discord.js');
+      const attachment = new AttachmentBuilder(cardBuffer, { name: 'leave.png' });
+      sendPayload.files = [attachment];
+      replyFiles.push(attachment);
+    }
 
     let targetChannel = null;
     if (channelId) {
@@ -1425,14 +1457,14 @@ async function handleLeaveTest(interaction) {
     }
 
     if (targetChannel) {
-      await targetChannel.send({ content: messageText, files: [attachment] });
+      await targetChannel.send(sendPayload);
       return interaction.editReply({
         content: `✅ Test-Leavekarte wurde in <#${channelId}> gesendet.`,
       });
     } else {
       return interaction.editReply({
         content: `ℹ️ Kein Leavekanal konfiguriert. Hier ist eine Vorschau:\n**Text:** ${messageText}`,
-        files: [attachment],
+        files: replyFiles,
       });
     }
   } catch (err) {
@@ -1445,12 +1477,13 @@ async function handleLeaveTest(interaction) {
 
 async function handleWelcomeEdit(interaction) {
   const config = require('../config');
-  let message, bg, accent, textcolor;
+  let message, bg, accent, textcolor, bannerEnabled;
   try {
     message = await config.getWelcomeMessage(interaction.guildId);
     bg = await config.getWelcomeBgUrl(interaction.guildId);
     accent = await config.getWelcomeAccentColor(interaction.guildId);
     textcolor = await config.getWelcomeTextColor(interaction.guildId);
+    bannerEnabled = await config.isWelcomeBannerEnabled(interaction.guildId);
   } catch (err) {
     console.error('Failed to load welcome info for modal:', err);
     return interaction.reply({
@@ -1501,11 +1534,21 @@ async function handleWelcomeEdit(interaction) {
     .setRequired(false)
     .setMaxLength(7);
 
+  const bannerInput = new TextInputBuilder()
+    .setCustomId('banner')
+    .setLabel('Banner aktivieren? (ja/nein)')
+    .setPlaceholder('ja oder nein eingeben')
+    .setStyle(TextInputStyle.Short)
+    .setValue(bannerEnabled ? 'ja' : 'nein')
+    .setRequired(false)
+    .setMaxLength(4);
+
   modal.addComponents(
     new ActionRowBuilder().addComponents(msgInput),
     new ActionRowBuilder().addComponents(bgInput),
     new ActionRowBuilder().addComponents(accentInput),
-    new ActionRowBuilder().addComponents(textColorInput)
+    new ActionRowBuilder().addComponents(textColorInput),
+    new ActionRowBuilder().addComponents(bannerInput)
   );
 
   await interaction.showModal(modal);
@@ -1513,12 +1556,13 @@ async function handleWelcomeEdit(interaction) {
 
 async function handleLeaveEdit(interaction) {
   const config = require('../config');
-  let message, bg, accent, textcolor;
+  let message, bg, accent, textcolor, bannerEnabled;
   try {
     message = await config.getLeaveMessage(interaction.guildId);
     bg = await config.getLeaveBgUrl(interaction.guildId);
     accent = await config.getLeaveAccentColor(interaction.guildId);
     textcolor = await config.getLeaveTextColor(interaction.guildId);
+    bannerEnabled = await config.isLeaveBannerEnabled(interaction.guildId);
   } catch (err) {
     console.error('Failed to load leave info for modal:', err);
     return interaction.reply({
@@ -1569,11 +1613,21 @@ async function handleLeaveEdit(interaction) {
     .setRequired(false)
     .setMaxLength(7);
 
+  const bannerInput = new TextInputBuilder()
+    .setCustomId('banner')
+    .setLabel('Banner aktivieren? (ja/nein)')
+    .setPlaceholder('ja oder nein eingeben')
+    .setStyle(TextInputStyle.Short)
+    .setValue(bannerEnabled ? 'ja' : 'nein')
+    .setRequired(false)
+    .setMaxLength(4);
+
   modal.addComponents(
     new ActionRowBuilder().addComponents(msgInput),
     new ActionRowBuilder().addComponents(bgInput),
     new ActionRowBuilder().addComponents(accentInput),
-    new ActionRowBuilder().addComponents(textColorInput)
+    new ActionRowBuilder().addComponents(textColorInput),
+    new ActionRowBuilder().addComponents(bannerInput)
   );
 
   await interaction.showModal(modal);

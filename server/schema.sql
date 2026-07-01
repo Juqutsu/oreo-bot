@@ -295,6 +295,13 @@ ALTER TABLE guilds ADD COLUMN voice_rec_enabled TINYINT(1) NOT NULL DEFAULT 0;
 ALTER TABLE guilds ADD COLUMN voice_rec_channel_id BIGINT UNSIGNED NULL;
 ALTER TABLE guilds ADD COLUMN voice_rec_message VARCHAR(255) NOT NULL DEFAULT 'Wer hat Oreo Ban gerufen? Ab ins Gefängnis!';
 
+-- ============================================================
+-- Stage 18 Migration: Welcome & Leave Banner Toggle
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN welcome_banner_enabled TINYINT(1) NOT NULL DEFAULT 1;
+ALTER TABLE guilds ADD COLUMN leave_banner_enabled TINYINT(1) NOT NULL DEFAULT 1;
+
+
 
 
 

@@ -28,6 +28,8 @@ async function handleWelcomeModalSubmit(interaction) {
   const background = interaction.fields.getTextInputValue('background').trim();
   const accent = interaction.fields.getTextInputValue('accent').trim();
   const textcolor = interaction.fields.getTextInputValue('textcolor').trim();
+  const bannerRaw = interaction.fields.getTextInputValue('banner').trim().toLowerCase();
+  const bannerEnabled = !['nein', 'no', 'false', '0', 'n'].includes(bannerRaw);
 
   // Validate hex colors
   if (accent && !HEX_COLOR_REGEX.test(accent)) {
@@ -51,6 +53,7 @@ async function handleWelcomeModalSubmit(interaction) {
     await config.setWelcomeBgUrl(interaction.guildId, cleanBg);
     if (accent) await config.setWelcomeAccentColor(interaction.guildId, accent);
     if (textcolor) await config.setWelcomeTextColor(interaction.guildId, textcolor);
+    await config.setWelcomeBannerEnabled(interaction.guildId, bannerEnabled);
   } catch (err) {
     console.error('[welcome-interaction] Modal save error:', err);
     return interaction.reply({
@@ -66,7 +69,8 @@ async function handleWelcomeModalSubmit(interaction) {
       { name: '📝 Nachricht', value: message || '(Standard)', inline: false },
       { name: '🖼️ Hintergrund', value: cleanBg ? `[Link](${cleanBg})` : 'Standard-Verlauf', inline: true },
       { name: '🎨 Akzentfarbe', value: accent || '#5865f2', inline: true },
-      { name: '✏️ Textfarbe', value: textcolor || '#7289da', inline: true }
+      { name: '✏️ Textfarbe', value: textcolor || '#7289da', inline: true },
+      { name: '🖼️ Banner mitsenden', value: bannerEnabled ? 'Ja' : 'Nein', inline: true }
     )
     .setFooter({ text: '🐾 Oreo • Design' })
     .setTimestamp();
@@ -81,6 +85,8 @@ async function handleLeaveModalSubmit(interaction) {
   const background = interaction.fields.getTextInputValue('background').trim();
   const accent = interaction.fields.getTextInputValue('accent').trim();
   const textcolor = interaction.fields.getTextInputValue('textcolor').trim();
+  const bannerRaw = interaction.fields.getTextInputValue('banner').trim().toLowerCase();
+  const bannerEnabled = !['nein', 'no', 'false', '0', 'n'].includes(bannerRaw);
 
   // Validate hex colors
   if (accent && !HEX_COLOR_REGEX.test(accent)) {
@@ -104,6 +110,7 @@ async function handleLeaveModalSubmit(interaction) {
     await config.setLeaveBgUrl(interaction.guildId, cleanBg);
     if (accent) await config.setLeaveAccentColor(interaction.guildId, accent);
     if (textcolor) await config.setLeaveTextColor(interaction.guildId, textcolor);
+    await config.setLeaveBannerEnabled(interaction.guildId, bannerEnabled);
   } catch (err) {
     console.error('[leave-interaction] Modal save error:', err);
     return interaction.reply({
@@ -119,7 +126,8 @@ async function handleLeaveModalSubmit(interaction) {
       { name: '📝 Nachricht', value: message || '(Standard)', inline: false },
       { name: '🖼️ Hintergrund', value: cleanBg ? `[Link](${cleanBg})` : 'Standard-Verlauf', inline: true },
       { name: '🎨 Akzentfarbe', value: accent || '#e74c3c', inline: true },
-      { name: '✏️ Textfarbe', value: textcolor || '#e74c3c', inline: true }
+      { name: '✏️ Textfarbe', value: textcolor || '#e74c3c', inline: true },
+      { name: '🖼️ Banner mitsenden', value: bannerEnabled ? 'Ja' : 'Nein', inline: true }
     )
     .setFooter({ text: '🐾 Oreo • Design' })
     .setTimestamp();
