@@ -209,6 +209,17 @@ module.exports = {
             .addStringOption((o) => o.setName('message').setDescription('Der lustige Satz, der gesendet wird').setRequired(false).setMaxLength(255))
         )
     )
+    .addSubcommandGroup((group) =>
+      group.setName('levelperms').setDescription('Verknüpft Ramen-Levels mit Rollen und Oreo-Rechten.')
+        .addSubcommand((sub) =>
+          sub.setName('set').setDescription('Setzt die Level-Rechte-Verknüpfung.')
+            .addIntegerOption((o) => o.setName('level').setDescription('Erforderliches Level für Supporter-Rechte').setRequired(true).setMinValue(1))
+            .addRoleOption((o) => o.setName('role').setDescription('Die Rolle, die automatisch vergeben wird (optional)').setRequired(false))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('unset').setDescription('Entfernt die Level-Rechte-Verknüpfung.')
+        )
+    )
     .addSubcommand((sub) =>
       sub.setName('show').setDescription('Zeigt die komplette Server-Konfiguration.')
     ),
@@ -265,6 +276,11 @@ module.exports = {
 
     if (group === 'voice') {
       if (sub === 'set')  return handleVoiceSet(interaction);
+    }
+
+    if (group === 'levelperms') {
+      if (sub === 'set')   return handleLevelPermsSet(interaction);
+      if (sub === 'unset') return handleLevelPermsUnset(interaction);
     }
 
     if (group === null && sub === 'show') {
@@ -1243,12 +1259,19 @@ async function handleShow(interaction) {
     escalationValue = shown.join('\n');
   }
 
+  // Link Level Perms candidacy role check (Oreo synergy)
+  const levelPermsRequired = guildRow?.level_supporter_required;
+  const candidacyRoleId = guildRow?.candidacy_role_id ? String(guildRow.candidacy_role_id) : null;
+  const levelPermsLine = levelPermsRequired 
+    ? `Level ${levelPermsRequired} (Rolle: ${candidacyRoleId ? `<@&${candidacyRoleId}>` : '(keine Rolle)'})` 
+    : '❌ deaktiviert';
+
   const embed = new EmbedBuilder()
     .setTitle('🛡️ Server-Konfiguration')
     .setColor(0x5865f2)
     .addFields(
       { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}\nServer-Log: ${serverlogLine}\nWelcome-Channel: ${welcomeChannelLine}\nLeave-Channel: ${leaveChannelLine}`, inline: false },
-      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nWelcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}\nVoice-Recognition: ${voiceLineShow}`,   inline: false },
+      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nWelcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}\nVoice-Recognition: ${voiceLineShow}\nLevel-Perms: ${levelPermsLine}`,   inline: false },
       { name: '📁 Server-Logs',  value: serverLogToggles, inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
@@ -1754,4 +1777,59 @@ async function handleVoiceSet(interaction) {
     content: `✅ **Voice-Recognition-System konfiguriert:**\n${updates.map((u) => `• ${u}`).join('\n')}`,
     flags: MessageFlags.Ephemeral,
   });
+}
+
+async function handleLevelPermsSet(interaction) {
+  const level = interaction.options.getInteger('level');
+  const role = interaction.options.getRole('role') ?? null;
+  const guildId = interaction.guildId;
+  const pool = getPool();
+
+  try {
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [guildId]);
+    await pool.execute(
+      'UPDATE guilds SET level_supporter_required = ?, candidacy_role_id = ? WHERE guild_id = ?',
+      [level, role ? role.id : null, guildId]
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ECC71')
+      .setTitle('✅ Level-Rechte-Verknüpfung aktualisiert')
+      .setDescription(`User erhalten ab **Level ${level}** automatisch Supporter-Rechte in Oreo.`)
+      .addFields(
+        { name: '📈 Benötigtes Level', value: `Level ${level}`, inline: true },
+        { name: '🏅 Rolle bei Level-Up', value: role ? `${role}` : '(Keine Rolle konfiguriert)', inline: true }
+      )
+      .setFooter({ text: 'Oreo & Ramen Synergy 🐾' })
+      .setTimestamp();
+
+    return await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  } catch (err) {
+    console.error('[config] Failed to set levelperms:', err);
+    return await interaction.reply({ content: '❌ Datenbankfehler beim Speichern.', flags: MessageFlags.Ephemeral });
+  }
+}
+
+async function handleLevelPermsUnset(interaction) {
+  const guildId = interaction.guildId;
+  const pool = getPool();
+
+  try {
+    await pool.execute(
+      'UPDATE guilds SET level_supporter_required = NULL, candidacy_role_id = NULL WHERE guild_id = ?',
+      [guildId]
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#E74C3C')
+      .setTitle('❌ Level-Rechte-Verknüpfung entfernt')
+      .setDescription('Die Level-Rechte-Verknüpfung wurde deaktiviert.')
+      .setFooter({ text: 'Oreo & Ramen Synergy 🐾' })
+      .setTimestamp();
+
+    return await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  } catch (err) {
+    console.error('[config] Failed to unset levelperms:', err);
+    return await interaction.reply({ content: '❌ Datenbankfehler beim Speichern.', flags: MessageFlags.Ephemeral });
+  }
 }

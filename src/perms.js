@@ -40,6 +40,31 @@ async function getEffectiveTier(guildId, member) {
       tierName = tier;
     }
   }
+
+  // Check level-based permission link (Ramen synergy)
+  try {
+    const [userLevelRows] = await getPool().execute(
+      'SELECT level FROM guild_users WHERE guild_id = ? AND user_id = ?',
+      [guildId, member.id]
+    );
+    const userLevel = userLevelRows[0]?.level ?? 1;
+
+    const [guildRows] = await getPool().execute(
+      'SELECT level_supporter_required FROM guilds WHERE guild_id = ?',
+      [guildId]
+    );
+    const requiredLevel = guildRows[0]?.level_supporter_required;
+
+    if (requiredLevel && userLevel >= requiredLevel) {
+      if (!tierName || TIERS[tierName] < TIERS['supporter']) {
+        tierName = 'supporter';
+        highest = TIERS['supporter'];
+      }
+    }
+  } catch (err) {
+    console.error('[perms] Error checking level-based permissions:', err);
+  }
+
   return tierName;
 }
 

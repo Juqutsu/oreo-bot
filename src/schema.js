@@ -36,6 +36,11 @@ async function ensureSchema() {
         console.warn('[schema] Skipped duplicate index (errno 1061):', err.sqlMessage);
         continue;
       }
+      // 1091 = ER_CANT_DROP_FIELD_OR_KEY: key doesn't exist — idempotent DROP INDEX
+      if (err.errno === 1091) {
+        console.warn('[schema] Skipped dropping missing key (errno 1091):', err.sqlMessage);
+        continue;
+      }
       throw err;
     }
   }

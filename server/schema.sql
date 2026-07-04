@@ -307,6 +307,29 @@ ALTER TABLE guilds ADD COLUMN leave_banner_enabled TINYINT(1) NOT NULL DEFAULT 1
 ALTER TABLE guilds ADD COLUMN welcome_banner_text VARCHAR(64) NOT NULL DEFAULT 'WILLKOMMEN';
 ALTER TABLE guilds ADD COLUMN leave_banner_text VARCHAR(64) NOT NULL DEFAULT 'AUF WIEDERSEHEN';
 
+-- ============================================================
+-- Stage 20 Migration: Level Perms, Card Evolution & Marketplace
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN level_supporter_required INT UNSIGNED NULL DEFAULT NULL;
+ALTER TABLE guilds ADD COLUMN candidacy_role_id BIGINT UNSIGNED NULL DEFAULT NULL;
+ALTER TABLE user_cards ADD COLUMN style VARCHAR(32) NOT NULL DEFAULT 'standard';
+ALTER TABLE user_cards DROP INDEX uq_user_card;
+ALTER TABLE user_cards DROP INDEX uq_guild_card;
+
+CREATE TABLE IF NOT EXISTS market_listings (
+  id            BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  guild_id      BIGINT UNSIGNED NOT NULL,
+  seller_id     BIGINT UNSIGNED NOT NULL,
+  listing_type  ENUM('card', 'item') NOT NULL,
+  target_id     VARCHAR(64) NOT NULL,
+  rarity        VARCHAR(32) NOT NULL,
+  style         VARCHAR(32) NOT NULL DEFAULT 'standard',
+  quantity      INT UNSIGNED NOT NULL DEFAULT 1,
+  price         INT UNSIGNED NOT NULL,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
+);
+
 
 
 
