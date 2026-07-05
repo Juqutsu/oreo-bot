@@ -206,7 +206,7 @@ async function dispatch(interaction) {
             embed
               .setTitle('⚠️ Verifizierung unvollständig (Rollen-Fehler)')
               .setColor(0xe67e22)
-              .setDescription(`Der User <@${member.id}> (${member.user.tag}) hat das Captcha gelöst, aber die Rolle <@&${roleObject?.id || verifiedRoleId}> konnte nicht zugewiesen werden.\n\n**Fehler:** \`${roleError.message}\`\n\n*Bitte stelle sicher, dass die Rolle 'Oreo' in der Rollen-Hierarchie über der zuzuweisenden Rolle steht.*`)
+              .setDescription(`Der User <@${member.id}> (${member.user.tag}) hat das Captcha gelöst, aber die Rollen konnten nicht vollständig zugewiesen oder entfernt werden.\n\n**Fehler:** \`${roleError.message}\`\n\n*Bitte stelle sicher, dass die Rolle 'Oreo' in der Rollen-Hierarchie über den zu vergebenden Rollen steht.*`)
               .setFooter({ text: '🐾 Oreo • Captcha-Fehler' });
           } else {
             embed

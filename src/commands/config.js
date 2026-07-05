@@ -1318,7 +1318,9 @@ async function handleShow(interaction) {
     .setColor(0x5865f2)
     .addFields(
       { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}\nServer-Log: ${serverlogLine}\nWelcome-Channel: ${welcomeChannelLine}\nLeave-Channel: ${leaveChannelLine}`, inline: false },
-      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nJoin-Rolle(n): ${joinRolesLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nWelcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}\nVoice-Recognition: ${voiceLineShow}\nLevel-Perms: ${levelPermsLine}`,   inline: false },
+      { name: '⚙️ Sicherheits- & Mod-Features', value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nVoice-Recognition: ${voiceLineShow}\nLevel-Perms: ${levelPermsLine}`, inline: false },
+      { name: '🔐 Beitritt & Verifizierung', value: `Captcha-Verifizierung: ${captchaEnabledLine}\nJoin-Rolle(n): ${joinRolesLine}`, inline: false },
+      { name: '👋 Willkommens- & Leave-System', value: `Welcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}`, inline: false },
       { name: '📁 Server-Logs',  value: serverLogToggles, inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },

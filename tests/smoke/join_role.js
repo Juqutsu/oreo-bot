@@ -165,8 +165,10 @@ async function main() {
     
     await guildMemberAdd.execute(mockMember);
 
-    // Assert that no roles are assigned or removed yet
-    assert.equal(assignedRoles.length, 0);
+    // Assert that the join roles are assigned immediately upon join, but no roles removed yet
+    assert.equal(assignedRoles.length, 2);
+    assert.equal(assignedRoles[0].roleId, JOIN_ROLE_1);
+    assert.equal(assignedRoles[1].roleId, JOIN_ROLE_2);
     assert.equal(removedRoles.length, 0);
 
     // Now trigger correct Captcha interaction (simulating verification success)
@@ -195,10 +197,8 @@ async function main() {
     assert.equal(removedRoles[0].roleId, UNVERIFIED_ROLE);
     assert.equal(removedRoles[0].reason, 'Oreo: Captcha erfolgreich gelöst (Unverified entfernt)');
 
-    // Assert join roles assigned (2 roles: JOIN_ROLE_1, JOIN_ROLE_2)
-    assert.equal(assignedRoles.filter(r => r.reason.includes('Join-Rolle')).length, 2);
-    assert.ok(assignedRoles.some(r => r.roleId === JOIN_ROLE_1));
-    assert.ok(assignedRoles.some(r => r.roleId === JOIN_ROLE_2));
+    // Assert join roles assigned (total of 4 assignments: 2 on join, 2 on captcha verify)
+    assert.equal(assignedRoles.filter(r => r.reason.includes('Join-Rolle')).length, 4);
 
     console.log('   Test 2 passed');
   }

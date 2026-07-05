@@ -102,6 +102,18 @@ async function execute(member) {
   }
 
   try {
+    const joinRoleIds = await config.getJoinRoleIds(guildId);
+    for (const rId of joinRoleIds) {
+      const role = member.guild.roles.cache.get(rId) || await member.guild.roles.fetch(rId).catch(() => null);
+      if (role) {
+        await member.roles.add(role, 'Oreo: Join-Rolle automatisch zugewiesen');
+      }
+    }
+  } catch (roleErr) {
+    console.error('[join-role] failed to assign join roles on join:', roleErr);
+  }
+
+  try {
     const captchaEnabled = (await config.getCaptchaEnabled(guildId)) || isRaidActive;
     if (captchaEnabled) {
       const captchaChannelId = await config.getCaptchaChannelId(guildId);
@@ -197,18 +209,6 @@ async function execute(member) {
           }
         }
       }, 15 * 60 * 1000);
-    } else {
-      try {
-        const joinRoleIds = await config.getJoinRoleIds(guildId);
-        for (const rId of joinRoleIds) {
-          const role = member.guild.roles.cache.get(rId) || await member.guild.roles.fetch(rId).catch(() => null);
-          if (role) {
-            await member.roles.add(role, 'Oreo: Join-Rolle automatisch zugewiesen');
-          }
-        }
-      } catch (roleErr) {
-        console.error('[join-role] failed to assign join roles on join:', roleErr);
-      }
     }
   } catch (err) {
     console.error('[captcha-verification] failed to initiate verification channel:', err);
