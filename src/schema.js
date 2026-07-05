@@ -41,6 +41,11 @@ async function ensureSchema() {
         console.warn('[schema] Skipped dropping missing key (errno 1091):', err.sqlMessage);
         continue;
       }
+      // 1146 = ER_NO_SUCH_TABLE: table doesn't exist — skip table-specific alters if not present
+      if (err.errno === 1146) {
+        console.warn('[schema] Skipped table alter for missing table (errno 1146):', err.sqlMessage);
+        continue;
+      }
       throw err;
     }
   }
