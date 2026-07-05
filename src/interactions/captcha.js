@@ -176,7 +176,8 @@ async function dispatch(interaction) {
 
     // 3. Assign all join roles
     try {
-      const joinRoleIds = await config.getJoinRoleIds(guild.id);
+      const unverifiedRoleIds = await config.getUnverifiedRoleIds(guild.id);
+      const joinRoleIds = (await config.getJoinRoleIds(guild.id)).filter(id => !unverifiedRoleIds.includes(id));
       if (joinRoleIds.length > 0) {
         const joinNames = [];
         for (const rId of joinRoleIds) {

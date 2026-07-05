@@ -157,24 +157,27 @@ async function getJoinRoleIds(guildId) {
  */
 async function addJoinRoleId(guildId, roleId) {
   const current = await getJoinRoleIds(guildId);
-  if (current.includes(roleId)) return;
+  if (current.includes(roleId)) return false;
   current.push(roleId);
   await getPool().execute(
     'UPDATE guilds SET join_role_ids = ? WHERE guild_id = ?',
     [current.join(','), guildId]
   );
+  return true;
 }
 
 /**
  * Entfernt eine Join-Rolle aus der Liste.
  */
 async function removeJoinRoleId(guildId, roleId) {
-  let current = await getJoinRoleIds(guildId);
-  current = current.filter(id => id !== roleId);
+  const current = await getJoinRoleIds(guildId);
+  if (!current.includes(roleId)) return false;
+  const next = current.filter(id => id !== roleId);
   await getPool().execute(
     'UPDATE guilds SET join_role_ids = ? WHERE guild_id = ?',
-    [current.length > 0 ? current.join(',') : null, guildId]
+    [next.length > 0 ? next.join(',') : null, guildId]
   );
+  return true;
 }
 
 /**
@@ -193,24 +196,27 @@ async function getVerifiedRoleIds(guildId) {
  */
 async function addVerifiedRoleId(guildId, roleId) {
   const current = await getVerifiedRoleIds(guildId);
-  if (current.includes(roleId)) return;
+  if (current.includes(roleId)) return false;
   current.push(roleId);
   await getPool().execute(
     'UPDATE guilds SET verified_role_ids = ? WHERE guild_id = ?',
     [current.join(','), guildId]
   );
+  return true;
 }
 
 /**
  * Entfernt eine verifizierte Rolle.
  */
 async function removeVerifiedRoleId(guildId, roleId) {
-  let current = await getVerifiedRoleIds(guildId);
-  current = current.filter(id => id !== roleId);
+  const current = await getVerifiedRoleIds(guildId);
+  if (!current.includes(roleId)) return false;
+  const next = current.filter(id => id !== roleId);
   await getPool().execute(
     'UPDATE guilds SET verified_role_ids = ? WHERE guild_id = ?',
-    [current.length > 0 ? current.join(',') : null, guildId]
+    [next.length > 0 ? next.join(',') : null, guildId]
   );
+  return true;
 }
 
 /**
@@ -226,24 +232,27 @@ async function getUnverifiedRoleIds(guildId) {
  */
 async function addUnverifiedRoleId(guildId, roleId) {
   const current = await getUnverifiedRoleIds(guildId);
-  if (current.includes(roleId)) return;
+  if (current.includes(roleId)) return false;
   current.push(roleId);
   await getPool().execute(
     'UPDATE guilds SET unverified_role_ids = ? WHERE guild_id = ?',
     [current.join(','), guildId]
   );
+  return true;
 }
 
 /**
  * Entfernt eine unverified Rolle.
  */
 async function removeUnverifiedRoleId(guildId, roleId) {
-  let current = await getUnverifiedRoleIds(guildId);
-  current = current.filter(id => id !== roleId);
+  const current = await getUnverifiedRoleIds(guildId);
+  if (!current.includes(roleId)) return false;
+  const next = current.filter(id => id !== roleId);
   await getPool().execute(
     'UPDATE guilds SET unverified_role_ids = ? WHERE guild_id = ?',
-    [current.length > 0 ? current.join(',') : null, guildId]
+    [next.length > 0 ? next.join(',') : null, guildId]
   );
+  return true;
 }
 
 /**

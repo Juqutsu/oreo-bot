@@ -203,6 +203,44 @@ async function main() {
     console.log('   Test 2 passed');
   }
 
+  // Test 3: Unverified role is also a join role
+  {
+    console.log('Running Test 3: Unverified role is also in join roles...');
+    assignedRoles = [];
+    removedRoles = [];
+    currentMemberRoles = [UNVERIFIED_ROLE]; // user starts with unverified role
+    currentGuildRow.captcha_enabled = 1;
+    currentGuildRow.join_role_ids = `${JOIN_ROLE_1},${UNVERIFIED_ROLE}`; // UNVERIFIED_ROLE is also in join roles
+    currentGuildRow.unverified_role_ids = UNVERIFIED_ROLE;
+
+    // Trigger join
+    await guildMemberAdd.execute(mockMember);
+
+    // Now trigger correct Captcha interaction
+    const mockInteraction = {
+      customId: `captcha_correct_1509540000000000001_1_🍎`,
+      user: { id: '1509540000000000001' },
+      guild: mockGuild,
+      channel: mockChannel,
+      deferUpdate: async () => {},
+      reply: async () => {}
+    };
+
+    await captcha.dispatch(mockInteraction);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify unverified role is removed
+    assert.equal(removedRoles.length, 1);
+    assert.equal(removedRoles[0].roleId, UNVERIFIED_ROLE);
+
+    // Verify that UNVERIFIED_ROLE is NOT added back during verification step (only JOIN_ROLE_1 is added)
+    const joinRolesAfterVerify = assignedRoles.filter(r => r.reason.includes('nach Captcha-Verifizierung'));
+    assert.equal(joinRolesAfterVerify.length, 1);
+    assert.equal(joinRolesAfterVerify[0].roleId, JOIN_ROLE_1);
+
+    console.log('   Test 3 passed');
+  }
+
   console.log('🎉 All multiple roles & removal smoke-tests passed successfully!');
   process.exit(0);
 }

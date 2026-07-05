@@ -156,6 +156,12 @@ module.exports = {
             .addRoleOption((o) => o.setName('role').setDescription('Rolle').setRequired(true))
         )
         .addSubcommand((sub) =>
+          sub.setName('unset-verified-roles').setDescription('Deaktiviert alle Rollen, die nach erfolgreicher Verifizierung vergeben werden.')
+        )
+        .addSubcommand((sub) =>
+          sub.setName('unset-unverified-roles').setDescription('Deaktiviert alle Rollen, die nach erfolgreicher Verifizierung entfernt werden.')
+        )
+        .addSubcommand((sub) =>
           sub.setName('set-toxicity').setDescription('Aktiviert/deaktiviert den Toxizitäts-Filter.')
             .addBooleanOption((o) => o.setName('enabled').setDescription('Aktiviert?').setRequired(true))
             .addStringOption((o) => o.setName('action').setDescription('Sanktion bei Verstoß').setRequired(false).addChoices(
@@ -291,6 +297,8 @@ module.exports = {
       if (sub === 'remove-verified-role') return handleSecurityRemoveVerifiedRole(interaction);
       if (sub === 'add-unverified-role') return handleSecurityAddUnverifiedRole(interaction);
       if (sub === 'remove-unverified-role') return handleSecurityRemoveUnverifiedRole(interaction);
+      if (sub === 'unset-verified-roles') return handleSecurityUnsetVerifiedRoles(interaction);
+      if (sub === 'unset-unverified-roles') return handleSecurityUnsetUnverifiedRoles(interaction);
       if (sub === 'set-toxicity') return handleSecuritySetToxicity(interaction);
       if (sub === 'add-bad-word') return handleSecurityAddBadWord(interaction);
       if (sub === 'remove-bad-word') return handleSecurityRemoveBadWord(interaction);
@@ -1526,10 +1534,12 @@ async function handleWelcomeSetJoinRole(interaction) {
 
 async function handleWelcomeUnsetJoinRole(interaction) {
   const pool = getPool();
-  const config = require('../config');
 
   try {
-    await config.setJoinRoleId(interaction.guildId, null);
+    await pool.execute(
+      'UPDATE guilds SET join_role_id = NULL, join_role_ids = NULL WHERE guild_id = ?',
+      [interaction.guildId]
+    );
   } catch (err) {
     console.error('/config welcome unset-join-role DB error:', err);
     return interaction.reply({
@@ -1539,7 +1549,7 @@ async function handleWelcomeUnsetJoinRole(interaction) {
   }
 
   return interaction.reply({
-    content: '✅ Die automatische Rollenvergabe beim Beitritt wurde deaktiviert.',
+    content: '✅ Die automatische Rollenvergabe beim Beitritt wurde vollständig zurückgesetzt.',
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -1988,7 +1998,13 @@ async function handleWelcomeAddJoinRole(interaction) {
   try {
     const pool = getPool();
     await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
-    await config.addJoinRoleId(interaction.guildId, role.id);
+    const success = await config.addJoinRoleId(interaction.guildId, role.id);
+    if (!success) {
+      return interaction.reply({
+        content: `⚠️ Rolle <@&${role.id}> ist bereits als automatische Beitrittsrolle konfiguriert.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   } catch (err) {
     console.error('/config welcome add-join-role DB error:', err);
     return interaction.reply({
@@ -2008,7 +2024,13 @@ async function handleWelcomeRemoveJoinRole(interaction) {
   const config = require('../config');
 
   try {
-    await config.removeJoinRoleId(interaction.guildId, role.id);
+    const success = await config.removeJoinRoleId(interaction.guildId, role.id);
+    if (!success) {
+      return interaction.reply({
+        content: `⚠️ Rolle <@&${role.id}> ist nicht als automatische Beitrittsrolle konfiguriert.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   } catch (err) {
     console.error('/config welcome remove-join-role DB error:', err);
     return interaction.reply({
@@ -2058,7 +2080,13 @@ async function handleSecurityAddVerifiedRole(interaction) {
   try {
     const pool = getPool();
     await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
-    await config.addVerifiedRoleId(interaction.guildId, role.id);
+    const success = await config.addVerifiedRoleId(interaction.guildId, role.id);
+    if (!success) {
+      return interaction.reply({
+        content: `⚠️ Rolle <@&${role.id}> ist bereits als Verifizierungs-Rolle konfiguriert.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   } catch (err) {
     console.error('/config security add-verified-role DB error:', err);
     return interaction.reply({
@@ -2078,7 +2106,13 @@ async function handleSecurityRemoveVerifiedRole(interaction) {
   const config = require('../config');
 
   try {
-    await config.removeVerifiedRoleId(interaction.guildId, role.id);
+    const success = await config.removeVerifiedRoleId(interaction.guildId, role.id);
+    if (!success) {
+      return interaction.reply({
+        content: `⚠️ Rolle <@&${role.id}> ist nicht als Verifizierungs-Rolle konfiguriert.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   } catch (err) {
     console.error('/config security remove-verified-role DB error:', err);
     return interaction.reply({
@@ -2107,7 +2141,13 @@ async function handleSecurityAddUnverifiedRole(interaction) {
   try {
     const pool = getPool();
     await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
-    await config.addUnverifiedRoleId(interaction.guildId, role.id);
+    const success = await config.addUnverifiedRoleId(interaction.guildId, role.id);
+    if (!success) {
+      return interaction.reply({
+        content: `⚠️ Rolle <@&${role.id}> ist bereits als zu entfernende Rolle konfiguriert.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   } catch (err) {
     console.error('/config security add-unverified-role DB error:', err);
     return interaction.reply({
@@ -2127,7 +2167,13 @@ async function handleSecurityRemoveUnverifiedRole(interaction) {
   const config = require('../config');
 
   try {
-    await config.removeUnverifiedRoleId(interaction.guildId, role.id);
+    const success = await config.removeUnverifiedRoleId(interaction.guildId, role.id);
+    if (!success) {
+      return interaction.reply({
+        content: `⚠️ Rolle <@&${role.id}> ist nicht als zu entfernende Rolle konfiguriert.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   } catch (err) {
     console.error('/config security remove-unverified-role DB error:', err);
     return interaction.reply({
@@ -2138,6 +2184,50 @@ async function handleSecurityRemoveUnverifiedRole(interaction) {
 
   return interaction.reply({
     content: `✅ Rolle <@&${role.id}> wurde aus den zu entfernenden unverifizierten Rollen entfernt.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleSecurityUnsetVerifiedRoles(interaction) {
+  const pool = getPool();
+
+  try {
+    await pool.execute(
+      'UPDATE guilds SET verified_role_id = NULL, verified_role_ids = NULL WHERE guild_id = ?',
+      [interaction.guildId]
+    );
+  } catch (err) {
+    console.error('/config security unset-verified-roles DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: '✅ Alle verifizierten Rollen wurden erfolgreich zurückgesetzt.',
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleSecurityUnsetUnverifiedRoles(interaction) {
+  const pool = getPool();
+
+  try {
+    await pool.execute(
+      'UPDATE guilds SET unverified_role_ids = NULL WHERE guild_id = ?',
+      [interaction.guildId]
+    );
+  } catch (err) {
+    console.error('/config security unset-unverified-roles DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: '✅ Alle zu entfernenden unverified Rollen wurden erfolgreich zurückgesetzt.',
     flags: MessageFlags.Ephemeral,
   });
 }
