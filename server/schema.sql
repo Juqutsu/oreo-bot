@@ -330,6 +330,20 @@ CREATE TABLE IF NOT EXISTS market_listings (
   FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
 );
 
+-- ============================================================
+-- Stage 21 Migration: Join Role
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN join_role_id BIGINT UNSIGNED NULL;
+
+-- ============================================================
+-- Stage 22 Migration: Multiple Roles & Unverified Roles
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN join_role_ids VARCHAR(512) NULL;
+ALTER TABLE guilds ADD COLUMN verified_role_ids VARCHAR(512) NULL;
+ALTER TABLE guilds ADD COLUMN unverified_role_ids VARCHAR(512) NULL;
+
+
+
 
 
 

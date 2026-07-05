@@ -7,7 +7,7 @@ const { getPool } = require('./db');
  */
 async function readGuildRow(guildId) {
   const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message, welcome_banner_enabled, leave_banner_enabled, welcome_banner_text, leave_banner_text FROM guilds WHERE guild_id = ?',
+    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, join_role_id, join_role_ids, verified_role_ids, unverified_role_ids, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message, welcome_banner_enabled, leave_banner_enabled, welcome_banner_text, leave_banner_text FROM guilds WHERE guild_id = ?',
     [guildId],
   );
   return rows[0] ?? null;
@@ -131,6 +131,135 @@ async function getVerifiedRoleId(guildId) {
 async function setVerifiedRoleId(guildId, roleId) {
   await getPool().execute(
     'UPDATE guilds SET verified_role_id = ? WHERE guild_id = ?',
+    [roleId || null, guildId]
+  );
+}
+
+// Helper for parsing comma-separated list
+function parseRolesList(str) {
+  if (!str) return [];
+  return str.split(',').map(s => s.trim()).filter(s => s.length > 0);
+}
+
+/**
+ * Liefert die Liste aller Join-Rollen (mit Fallback auf getJoinRoleId).
+ */
+async function getJoinRoleIds(guildId) {
+  const row = await readGuildRow(guildId);
+  const list = parseRolesList(row?.join_role_ids);
+  if (list.length > 0) return list;
+  // Fallback to single old role if configured
+  return row?.join_role_id ? [String(row.join_role_id)] : [];
+}
+
+/**
+ * Fügt eine Join-Rolle zur Liste hinzu.
+ */
+async function addJoinRoleId(guildId, roleId) {
+  const current = await getJoinRoleIds(guildId);
+  if (current.includes(roleId)) return;
+  current.push(roleId);
+  await getPool().execute(
+    'UPDATE guilds SET join_role_ids = ? WHERE guild_id = ?',
+    [current.join(','), guildId]
+  );
+}
+
+/**
+ * Entfernt eine Join-Rolle aus der Liste.
+ */
+async function removeJoinRoleId(guildId, roleId) {
+  let current = await getJoinRoleIds(guildId);
+  current = current.filter(id => id !== roleId);
+  await getPool().execute(
+    'UPDATE guilds SET join_role_ids = ? WHERE guild_id = ?',
+    [current.length > 0 ? current.join(',') : null, guildId]
+  );
+}
+
+/**
+ * Liefert die Liste aller verifizierten Rollen (mit Fallback auf getVerifiedRoleId).
+ */
+async function getVerifiedRoleIds(guildId) {
+  const row = await readGuildRow(guildId);
+  const list = parseRolesList(row?.verified_role_ids);
+  if (list.length > 0) return list;
+  // Fallback to single old role if configured
+  return row?.verified_role_id ? [String(row.verified_role_id)] : [];
+}
+
+/**
+ * Fügt eine verifizierte Rolle hinzu.
+ */
+async function addVerifiedRoleId(guildId, roleId) {
+  const current = await getVerifiedRoleIds(guildId);
+  if (current.includes(roleId)) return;
+  current.push(roleId);
+  await getPool().execute(
+    'UPDATE guilds SET verified_role_ids = ? WHERE guild_id = ?',
+    [current.join(','), guildId]
+  );
+}
+
+/**
+ * Entfernt eine verifizierte Rolle.
+ */
+async function removeVerifiedRoleId(guildId, roleId) {
+  let current = await getVerifiedRoleIds(guildId);
+  current = current.filter(id => id !== roleId);
+  await getPool().execute(
+    'UPDATE guilds SET verified_role_ids = ? WHERE guild_id = ?',
+    [current.length > 0 ? current.join(',') : null, guildId]
+  );
+}
+
+/**
+ * Liefert die Liste aller unverified Rollen (Rollen, die bei Verifizierung entfernt werden).
+ */
+async function getUnverifiedRoleIds(guildId) {
+  const row = await readGuildRow(guildId);
+  return parseRolesList(row?.unverified_role_ids);
+}
+
+/**
+ * Fügt eine unverified Rolle hinzu.
+ */
+async function addUnverifiedRoleId(guildId, roleId) {
+  const current = await getUnverifiedRoleIds(guildId);
+  if (current.includes(roleId)) return;
+  current.push(roleId);
+  await getPool().execute(
+    'UPDATE guilds SET unverified_role_ids = ? WHERE guild_id = ?',
+    [current.join(','), guildId]
+  );
+}
+
+/**
+ * Entfernt eine unverified Rolle.
+ */
+async function removeUnverifiedRoleId(guildId, roleId) {
+  let current = await getUnverifiedRoleIds(guildId);
+  current = current.filter(id => id !== roleId);
+  await getPool().execute(
+    'UPDATE guilds SET unverified_role_ids = ? WHERE guild_id = ?',
+    [current.length > 0 ? current.join(',') : null, guildId]
+  );
+}
+
+/**
+ * Liefert die Join-Rolle (Auto-Role). Deprecated.
+ */
+async function getJoinRoleId(guildId) {
+  const row = await readGuildRow(guildId);
+  return row?.join_role_id ? String(row.join_role_id) : null;
+}
+
+/**
+ * Setzt die Join-Rolle (Auto-Role). Deprecated.
+ */
+async function setJoinRoleId(guildId, roleId) {
+  await getPool().execute(
+    'UPDATE guilds SET join_role_id = ? WHERE guild_id = ?',
     [roleId || null, guildId]
   );
 }
@@ -688,5 +817,16 @@ module.exports = {
   setWelcomeBannerText,
   getLeaveBannerText,
   setLeaveBannerText,
+  getJoinRoleId,
+  setJoinRoleId,
+  getJoinRoleIds,
+  addJoinRoleId,
+  removeJoinRoleId,
+  getVerifiedRoleIds,
+  addVerifiedRoleId,
+  removeVerifiedRoleId,
+  getUnverifiedRoleIds,
+  addUnverifiedRoleId,
+  removeUnverifiedRoleId,
 };
 

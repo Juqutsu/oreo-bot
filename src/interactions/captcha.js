@@ -111,46 +111,88 @@ async function dispatch(interaction) {
   if (action === 'correct') {
     await interaction.deferUpdate();
 
-    const verifiedRoleId = await config.getVerifiedRoleId(guild.id);
     let assignedRoleText = '';
     let roleError = null;
-    let roleObject = null;
 
-    if (verifiedRoleId) {
-      const role = guild.roles.cache.get(verifiedRoleId) || await guild.roles.fetch(verifiedRoleId).catch(() => null);
-      if (role) {
-        roleObject = role;
-        try {
-          await member.roles.add(role, 'Oreo: Captcha erfolgreich gelöst');
-          assignedRoleText = ` (Rolle <@&${role.id}> zugewiesen)`;
-        } catch (err) {
-          console.error(`[captcha] Failed to assign role ${verifiedRoleId} to ${targetUserId}:`, err);
-          roleError = err;
+    // 1. Assign all verified roles
+    try {
+      const verifiedRoleIds = await config.getVerifiedRoleIds(guild.id);
+      if (verifiedRoleIds.length > 0) {
+        const assignedNames = [];
+        for (const rId of verifiedRoleIds) {
+          const role = guild.roles.cache.get(rId) || await guild.roles.fetch(rId).catch(() => null);
+          if (role) {
+            await member.roles.add(role, 'Oreo: Captcha erfolgreich gelöst');
+            assignedNames.push(`<@&${role.id}>`);
+          }
         }
-      }
-    } else {
-      let role = guild.roles.cache.find((r) => r.name === 'Member');
-      if (!role) {
-        role = await guild.roles.create({
-          name: 'Member',
-          color: 0x2ecc71,
-          permissions: [PermissionFlagsBits.ViewChannel],
-          reason: 'Oreo Verifizierungs-Rolle Setup',
-        }).catch(() => null);
+        if (assignedNames.length > 0) {
+          assignedRoleText = ` (Rolle(n) ${assignedNames.join(', ')} zugewiesen)`;
+        }
+      } else {
+        // Fallback: Create/assign default 'Member' role if none configured at all
+        let role = guild.roles.cache.find((r) => r.name === 'Member');
+        if (!role) {
+          role = await guild.roles.create({
+            name: 'Member',
+            color: 0x2ecc71,
+            permissions: [PermissionFlagsBits.ViewChannel],
+            reason: 'Oreo Verifizierungs-Rolle Setup',
+          }).catch(() => null);
+          if (role) {
+            await config.setVerifiedRoleId(guild.id, role.id);
+          }
+        }
         if (role) {
-          await config.setVerifiedRoleId(guild.id, role.id);
-        }
-      }
-      if (role) {
-        roleObject = role;
-        try {
           await member.roles.add(role, 'Oreo: Captcha erfolgreich gelöst');
           assignedRoleText = ` (Rolle <@&${role.id}> zugewiesen)`;
-        } catch (err) {
-          console.error(`[captcha] Failed to assign role ${role.id} to ${targetUserId}:`, err);
-          roleError = err;
         }
       }
+    } catch (err) {
+      console.error(`[captcha] Failed to assign verified roles to ${targetUserId}:`, err);
+      roleError = err;
+    }
+
+    // 2. Remove all unverified roles
+    try {
+      const unverifiedRoleIds = await config.getUnverifiedRoleIds(guild.id);
+      if (unverifiedRoleIds.length > 0) {
+        const removedNames = [];
+        for (const rId of unverifiedRoleIds) {
+          const role = guild.roles.cache.get(rId) || await guild.roles.fetch(rId).catch(() => null);
+          if (role && member.roles.cache.has(role.id)) {
+            await member.roles.remove(role, 'Oreo: Captcha erfolgreich gelöst (Unverified entfernt)');
+            removedNames.push(`<@&${role.id}>`);
+          }
+        }
+        if (removedNames.length > 0) {
+          assignedRoleText += ` (Rolle(n) ${removedNames.join(', ')} entfernt)`;
+        }
+      }
+    } catch (err) {
+      console.error(`[captcha] Failed to remove unverified roles from ${targetUserId}:`, err);
+      if (!roleError) roleError = err;
+    }
+
+    // 3. Assign all join roles
+    try {
+      const joinRoleIds = await config.getJoinRoleIds(guild.id);
+      if (joinRoleIds.length > 0) {
+        const joinNames = [];
+        for (const rId of joinRoleIds) {
+          const role = guild.roles.cache.get(rId) || await guild.roles.fetch(rId).catch(() => null);
+          if (role) {
+            await member.roles.add(role, 'Oreo: Join-Rolle nach Captcha-Verifizierung zugewiesen');
+            joinNames.push(`<@&${role.id}>`);
+          }
+        }
+        if (joinNames.length > 0) {
+          assignedRoleText += ` (Beitrittsrolle(n) ${joinNames.join(', ')} zugewiesen)`;
+        }
+      }
+    } catch (err) {
+      console.error(`[captcha] Failed to assign join roles to ${targetUserId}:`, err);
+      if (!roleError) roleError = err;
     }
 
     try {

@@ -140,6 +140,22 @@ module.exports = {
             .addChannelOption((o) => o.setName('channel').setDescription('Kanal für die globale Verifizierung').setRequired(false).addChannelTypes(ChannelType.GuildText))
         )
         .addSubcommand((sub) =>
+          sub.setName('add-verified-role').setDescription('Fügt eine Rolle hinzu, die nach erfolgreicher Verifizierung vergeben wird.')
+            .addRoleOption((o) => o.setName('role').setDescription('Rolle').setRequired(true))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('remove-verified-role').setDescription('Entfernt eine Rolle aus den verifizierten Rollen.')
+            .addRoleOption((o) => o.setName('role').setDescription('Rolle').setRequired(true))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('add-unverified-role').setDescription('Fügt eine Rolle hinzu, die nach erfolgreicher Verifizierung entfernt wird.')
+            .addRoleOption((o) => o.setName('role').setDescription('Rolle').setRequired(true))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('remove-unverified-role').setDescription('Entfernt eine Rolle aus den zu löschenden unverifizierten Rollen.')
+            .addRoleOption((o) => o.setName('role').setDescription('Rolle').setRequired(true))
+        )
+        .addSubcommand((sub) =>
           sub.setName('set-toxicity').setDescription('Aktiviert/deaktiviert den Toxizitäts-Filter.')
             .addBooleanOption((o) => o.setName('enabled').setDescription('Aktiviert?').setRequired(true))
             .addStringOption((o) => o.setName('action').setDescription('Sanktion bei Verstoß').setRequired(false).addChoices(
@@ -178,6 +194,21 @@ module.exports = {
         )
         .addSubcommand((sub) =>
           sub.setName('edit').setDescription('Öffnet ein Modal zur Konfiguration von Design, Text & Farben.')
+        )
+        .addSubcommand((sub) =>
+          sub.setName('set-join-role').setDescription('Setzt die Rolle, die beim Beitritt automatisch vergeben wird.')
+            .addRoleOption((o) => o.setName('role').setDescription('Rolle').setRequired(true))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('unset-join-role').setDescription('Deaktiviert die automatische Rollenvergabe beim Beitritt.')
+        )
+        .addSubcommand((sub) =>
+          sub.setName('add-join-role').setDescription('Fügt eine Rolle hinzu, die beim Beitritt automatisch vergeben wird.')
+            .addRoleOption((o) => o.setName('role').setDescription('Rolle').setRequired(true))
+        )
+        .addSubcommand((sub) =>
+          sub.setName('remove-join-role').setDescription('Entfernt eine Rolle aus der automatischen Beitrittsvergabe.')
+            .addRoleOption((o) => o.setName('role').setDescription('Rolle').setRequired(true))
         )
     )
     .addSubcommandGroup((group) =>
@@ -256,6 +287,10 @@ module.exports = {
       if (sub === 'set-age') return handleSecuritySetAge(interaction);
       if (sub === 'set-warn-decay') return handleSecuritySetWarnDecay(interaction);
       if (sub === 'set-captcha') return handleSecuritySetCaptcha(interaction);
+      if (sub === 'add-verified-role') return handleSecurityAddVerifiedRole(interaction);
+      if (sub === 'remove-verified-role') return handleSecurityRemoveVerifiedRole(interaction);
+      if (sub === 'add-unverified-role') return handleSecurityAddUnverifiedRole(interaction);
+      if (sub === 'remove-unverified-role') return handleSecurityRemoveUnverifiedRole(interaction);
       if (sub === 'set-toxicity') return handleSecuritySetToxicity(interaction);
       if (sub === 'add-bad-word') return handleSecurityAddBadWord(interaction);
       if (sub === 'remove-bad-word') return handleSecurityRemoveBadWord(interaction);
@@ -266,6 +301,10 @@ module.exports = {
       if (sub === 'set')  return handleWelcomeSet(interaction);
       if (sub === 'test') return handleWelcomeTest(interaction);
       if (sub === 'edit') return handleWelcomeEdit(interaction);
+      if (sub === 'set-join-role') return handleWelcomeSetJoinRole(interaction);
+      if (sub === 'unset-join-role') return handleWelcomeUnsetJoinRole(interaction);
+      if (sub === 'add-join-role') return handleWelcomeAddJoinRole(interaction);
+      if (sub === 'remove-join-role') return handleWelcomeRemoveJoinRole(interaction);
     }
 
     if (group === 'leave') {
@@ -1180,9 +1219,17 @@ async function handleShow(interaction) {
   const mutedRoleId = guildRow?.muted_role_id ? String(guildRow.muted_role_id) : null;
   const mutedRoleLine = mutedRoleId ? `<@&${mutedRoleId}>` : '(nicht konfiguriert)';
   const captchaOn = Boolean(guildRow?.captcha_enabled);
-  const verifiedRoleId = guildRow?.verified_role_id ? String(guildRow.verified_role_id) : null;
+  const config = require('../config');
+  const joinRoleIds = await config.getJoinRoleIds(interaction.guildId);
+  const verifiedRoleIds = await config.getVerifiedRoleIds(interaction.guildId);
+  const unverifiedRoleIds = await config.getUnverifiedRoleIds(interaction.guildId);
+
+  const joinRolesLine = joinRoleIds.length > 0 ? joinRoleIds.map(id => `<@&${id}>`).join(', ') : '(nicht konfiguriert)';
+  const verifiedRolesLine = verifiedRoleIds.length > 0 ? verifiedRoleIds.map(id => `<@&${id}>`).join(', ') : '(keine Rolle)';
+  const unverifiedRolesLine = unverifiedRoleIds.length > 0 ? unverifiedRoleIds.map(id => `<@&${id}>`).join(', ') : '(keine Rolle)';
+
   const captchaEnabledLine = captchaOn
-    ? `✅ aktiv (Rolle: ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '(keine Rolle)'})`
+    ? `✅ aktiv (Geben: ${verifiedRolesLine} | Entfernen: ${unverifiedRolesLine})`
     : '❌ deaktiviert';
   const toxicityOn = Boolean(guildRow?.toxicity_enabled);
   const toxicityActionText = guildRow?.toxicity_action ?? 'warn';
@@ -1271,7 +1318,7 @@ async function handleShow(interaction) {
     .setColor(0x5865f2)
     .addFields(
       { name: '📺 Channels',     value: `Report: ${reportLine}\nMod-Log: ${modlogLine}\nMsg-Log: ${msglogLine}\nServer-Log: ${serverlogLine}\nWelcome-Channel: ${welcomeChannelLine}\nLeave-Channel: ${leaveChannelLine}`, inline: false },
-      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nWelcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}\nVoice-Recognition: ${voiceLineShow}\nLevel-Perms: ${levelPermsLine}`,   inline: false },
+      { name: '⚙️ Features',     value: `Automod: ${automodLine}\nKontoalters-Prüfung: ${minAgeLine}\nVerwarnungs-Verfall: ${warnDecayLine}\nMute-Rolle: ${mutedRoleLine}\nCaptcha-Verifizierung: ${captchaEnabledLine}\nJoin-Rolle(n): ${joinRolesLine}\nToxizitäts-Filter: ${toxicityEnabledLine}\nWelcome-Card: ${welcomeLineShow}\nLeave-Card: ${leaveLineShow}\nVoice-Recognition: ${voiceLineShow}\nLevel-Perms: ${levelPermsLine}`,   inline: false },
       { name: '📁 Server-Logs',  value: serverLogToggles, inline: false },
       { name: '🎯 Eskalation',   value: escalationValue,                                  inline: false },
       { name: '📊 Statistiken',  value: `Nächste Case-Nr: ${nextCase}`,                  inline: false },
@@ -1423,6 +1470,76 @@ async function handleWelcomeTest(interaction) {
       content: '❌ Fehler bei der Generierung der Test-Willkommenskarte: ' + err.message,
     });
   }
+}
+
+async function handleWelcomeSetJoinRole(interaction) {
+  const role = interaction.options.getRole('role');
+  const pool = getPool();
+  const config = require('../config');
+
+  if (role.id === interaction.guildId) {
+    return interaction.reply({
+      content: 'Die @everyone-Rolle kann nicht zugewiesen werden.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  if (role.managed) {
+    return interaction.reply({
+      content: 'Bot-/Integration-Rollen können nicht zugewiesen werden.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const botMember = interaction.guild.members.me;
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    return interaction.reply({
+      content: '❌ Mir fehlt die Permission "Rollen verwalten" auf diesem Server.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (role.position >= botMember.roles.highest.position) {
+    return interaction.reply({
+      content: `❌ Die Rolle <@&${role.id}> steht in der Hierarchie über oder auf gleicher Höhe wie meine höchste Rolle. Ich kann diese Rolle nicht zuweisen.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  try {
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await config.setJoinRoleId(interaction.guildId, role.id);
+  } catch (err) {
+    console.error('/config welcome set-join-role DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Neue Mitglieder erhalten beim Beitritt nun automatisch die Rolle <@&${role.id}>.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleWelcomeUnsetJoinRole(interaction) {
+  const pool = getPool();
+  const config = require('../config');
+
+  try {
+    await config.setJoinRoleId(interaction.guildId, null);
+  } catch (err) {
+    console.error('/config welcome unset-join-role DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: '✅ Die automatische Rollenvergabe beim Beitritt wurde deaktiviert.',
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 async function handleLeaveSet(interaction) {
@@ -1833,3 +1950,193 @@ async function handleLevelPermsUnset(interaction) {
     return await interaction.reply({ content: '❌ Datenbankfehler beim Speichern.', flags: MessageFlags.Ephemeral });
   }
 }
+
+async function handleWelcomeAddJoinRole(interaction) {
+  const role = interaction.options.getRole('role');
+  const config = require('../config');
+
+  if (role.id === interaction.guildId) {
+    return interaction.reply({
+      content: 'Die @everyone-Rolle kann nicht zugewiesen werden.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  if (role.managed) {
+    return interaction.reply({
+      content: 'Bot-/Integration-Rollen können nicht zugewiesen werden.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const botMember = interaction.guild.members.me;
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    return interaction.reply({
+      content: '❌ Mir fehlt die Permission "Rollen verwalten" auf diesem Server.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (role.position >= botMember.roles.highest.position) {
+    return interaction.reply({
+      content: `❌ Die Rolle <@&${role.id}> steht in der Hierarchie über oder auf gleicher Höhe wie meine höchste Rolle. Ich kann diese Rolle nicht zuweisen.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  try {
+    const pool = getPool();
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await config.addJoinRoleId(interaction.guildId, role.id);
+  } catch (err) {
+    console.error('/config welcome add-join-role DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Rolle <@&${role.id}> wurde zu den automatischen Beitrittsrollen hinzugefügt.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleWelcomeRemoveJoinRole(interaction) {
+  const role = interaction.options.getRole('role');
+  const config = require('../config');
+
+  try {
+    await config.removeJoinRoleId(interaction.guildId, role.id);
+  } catch (err) {
+    console.error('/config welcome remove-join-role DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Rolle <@&${role.id}> wurde aus den automatischen Beitrittsrollen entfernt.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleSecurityAddVerifiedRole(interaction) {
+  const role = interaction.options.getRole('role');
+  const config = require('../config');
+
+  if (role.id === interaction.guildId) {
+    return interaction.reply({
+      content: 'Die @everyone-Rolle kann nicht zugewiesen werden.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  if (role.managed) {
+    return interaction.reply({
+      content: 'Bot-/Integration-Rollen können nicht zugewiesen werden.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const botMember = interaction.guild.members.me;
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    return interaction.reply({
+      content: '❌ Mir fehlt die Permission "Rollen verwalten" auf diesem Server.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (role.position >= botMember.roles.highest.position) {
+    return interaction.reply({
+      content: `❌ Die Rolle <@&${role.id}> steht in der Hierarchie über oder auf gleicher Höhe wie meine höchste Rolle. Ich kann diese Rolle nicht zuweisen.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  try {
+    const pool = getPool();
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await config.addVerifiedRoleId(interaction.guildId, role.id);
+  } catch (err) {
+    console.error('/config security add-verified-role DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Rolle <@&${role.id}> wurde zu den Rollen hinzugefügt, die nach erfolgreicher Verifizierung vergeben werden.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleSecurityRemoveVerifiedRole(interaction) {
+  const role = interaction.options.getRole('role');
+  const config = require('../config');
+
+  try {
+    await config.removeVerifiedRoleId(interaction.guildId, role.id);
+  } catch (err) {
+    console.error('/config security remove-verified-role DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Rolle <@&${role.id}> wurde aus den verifizierten Rollen entfernt.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleSecurityAddUnverifiedRole(interaction) {
+  const role = interaction.options.getRole('role');
+  const config = require('../config');
+
+  if (role.id === interaction.guildId) {
+    return interaction.reply({
+      content: 'Die @everyone-Rolle ist ungültig.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  try {
+    const pool = getPool();
+    await pool.execute('INSERT IGNORE INTO guilds (guild_id) VALUES (?)', [interaction.guildId]);
+    await config.addUnverifiedRoleId(interaction.guildId, role.id);
+  } catch (err) {
+    console.error('/config security add-unverified-role DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Rolle <@&${role.id}> wurde zu den Rollen hinzugefügt, die nach erfolgreicher Verifizierung entfernt werden.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleSecurityRemoveUnverifiedRole(interaction) {
+  const role = interaction.options.getRole('role');
+  const config = require('../config');
+
+  try {
+    await config.removeUnverifiedRoleId(interaction.guildId, role.id);
+  } catch (err) {
+    console.error('/config security remove-unverified-role DB error:', err);
+    return interaction.reply({
+      content: 'Datenbankfehler — versuch es später.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Rolle <@&${role.id}> wurde aus den zu entfernenden unverifizierten Rollen entfernt.`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
