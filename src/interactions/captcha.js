@@ -160,7 +160,7 @@ async function dispatch(interaction) {
         const removedNames = [];
         for (const rId of unverifiedRoleIds) {
           const role = guild.roles.cache.get(rId) || await guild.roles.fetch(rId).catch(() => null);
-          if (role && member.roles.cache.has(role.id)) {
+          if (role) {
             await member.roles.remove(role, 'Oreo: Captcha erfolgreich gelöst (Unverified entfernt)');
             removedNames.push(`<@&${role.id}>`);
           }
