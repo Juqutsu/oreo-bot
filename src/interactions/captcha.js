@@ -59,8 +59,11 @@ async function dispatch(interaction) {
   if (!customId.startsWith('captcha_')) return false;
 
   if (customId === 'captcha_global_start') {
-    const verifiedRoleId = await config.getVerifiedRoleId(interaction.guild.id);
-    if (verifiedRoleId && interaction.member.roles.cache.has(verifiedRoleId)) {
+    const verifiedRoleIds = await config.getVerifiedRoleIds(interaction.guild.id);
+    const isAlreadyVerified = verifiedRoleIds.length > 0
+      ? verifiedRoleIds.some(rId => interaction.member.roles.cache.has(rId))
+      : false;
+    if (isAlreadyVerified) {
       await interaction.reply({
         content: '✅ Du bist bereits verifiziert!',
         flags: MessageFlags.Ephemeral,

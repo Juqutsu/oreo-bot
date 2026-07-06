@@ -184,8 +184,10 @@ async function execute(member) {
       setTimeout(async () => {
         const currentMember = await member.guild.members.fetch(member.id).catch(() => null);
         if (currentMember) {
-          const verifiedRoleId = await config.getVerifiedRoleId(guildId);
-          const hasRole = verifiedRoleId ? currentMember.roles.cache.has(verifiedRoleId) : false;
+          const verifiedRoleIds = await config.getVerifiedRoleIds(guildId);
+          const hasRole = verifiedRoleIds.length > 0
+            ? verifiedRoleIds.some(rId => currentMember.roles.cache.has(rId))
+            : false;
           if (!hasRole) {
             await currentMember.kick('Oreo: Verifizierung abgelaufen').catch(() => null);
             const logChannelId = await config.getModLogChannelId(guildId);
