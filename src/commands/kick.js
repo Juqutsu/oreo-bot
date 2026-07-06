@@ -8,7 +8,7 @@ module.exports = {
     .setName('kick')
     .setDescription('Kicke einen Spieler vom Server')
     .addUserOption((user) => user.setName("target").setDescription("Spieler zum kicken").setRequired(true))
-    .addStringOption((r) => r.setName("reason").setDescription("Grund fürs kicken").setRequired(false)),
+    .addStringOption((r) => r.setName("reason").setDescription("Grund fürs kicken").setMaxLength(512).setRequired(false)),
 
   requiredTier: 'owner',
 
