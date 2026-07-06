@@ -59,13 +59,22 @@ async function dispatch(interaction) {
   if (!customId.startsWith('captcha_')) return false;
 
   if (customId === 'captcha_global_start') {
-    const verifiedRoleIds = await config.getVerifiedRoleIds(interaction.guild.id);
-    const isAlreadyVerified = verifiedRoleIds.length > 0
-      ? verifiedRoleIds.some(rId => interaction.member.roles.cache.has(rId))
-      : false;
-    if (isAlreadyVerified) {
+    try {
+      const verifiedRoleIds = await config.getVerifiedRoleIds(interaction.guild.id);
+      const isAlreadyVerified = verifiedRoleIds.length > 0
+        ? verifiedRoleIds.some(rId => interaction.member.roles.cache.has(rId))
+        : false;
+      if (isAlreadyVerified) {
+        await interaction.reply({
+          content: 'Du bist bereits verifiziert!',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => null);
+        return true;
+      }
+    } catch (err) {
+      console.error('[captcha] Fehler beim Abrufen der verifizierten Rollen (global start):', err);
       await interaction.reply({
-        content: '✅ Du bist bereits verifiziert!',
+        content: 'Ein Fehler ist aufgetreten beim Ueberpruefen der Verifizierung. Bitte versuche es spaeter noch einmal.',
         flags: MessageFlags.Ephemeral,
       }).catch(() => null);
       return true;

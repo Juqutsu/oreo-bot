@@ -182,33 +182,44 @@ async function execute(member) {
       }
 
       setTimeout(async () => {
-        const currentMember = await member.guild.members.fetch(member.id).catch(() => null);
-        if (currentMember) {
-          const verifiedRoleIds = await config.getVerifiedRoleIds(guildId);
-          const hasRole = verifiedRoleIds.length > 0
-            ? verifiedRoleIds.some(rId => currentMember.roles.cache.has(rId))
-            : false;
-          if (!hasRole) {
-            await currentMember.kick('Oreo: Verifizierung abgelaufen').catch(() => null);
-            const logChannelId = await config.getModLogChannelId(guildId);
-            if (logChannelId) {
-              const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
-              if (logChannel) {
-                const logEmbed = new EmbedBuilder()
-                  .setTitle('❌ Verifizierung abgelaufen')
-                  .setColor(0xe74c3c)
-                  .setDescription(`Die Verifizierungszeit für <@${member.user.id}> (${member.user.tag}) ist abgelaufen. Der User wurde gekickt.`)
-                  .setTimestamp();
-                await logChannel.send({ embeds: [logEmbed] }).catch(() => null);
+        try {
+          const currentMember = await member.guild.members.fetch(member.id).catch(() => null);
+          if (currentMember) {
+            let verifiedRoleIds = [];
+            try {
+              verifiedRoleIds = await config.getVerifiedRoleIds(guildId);
+            } catch (dbErr) {
+              console.error('[captcha-timeout] Fehler beim Abrufen der verifizierten Rollen:', dbErr);
+              return;
+            }
+
+            const hasRole = verifiedRoleIds.length > 0
+              ? verifiedRoleIds.some(rId => currentMember.roles.cache.has(rId))
+              : false;
+            if (!hasRole) {
+              await currentMember.kick('Oreo: Verifizierung abgelaufen').catch(() => null);
+              const logChannelId = await config.getModLogChannelId(guildId).catch(() => null);
+              if (logChannelId) {
+                const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
+                if (logChannel) {
+                  const logEmbed = new EmbedBuilder()
+                    .setTitle('Verifizierung abgelaufen')
+                    .setColor(0xe74c3c)
+                    .setDescription(`Die Verifizierungszeit für <@${member.user.id}> (${member.user.tag}) ist abgelaufen. Der User wurde gekickt.`)
+                    .setTimestamp();
+                  await logChannel.send({ embeds: [logEmbed] }).catch(() => null);
+                }
               }
             }
           }
-        }
-        if (!isGlobal && verifyChannel) {
-          const chan = await member.guild.channels.fetch(verifyChannel.id).catch(() => null);
-          if (chan) {
-            await chan.delete('Oreo: Verifizierung abgelaufen').catch(() => null);
+          if (!isGlobal && verifyChannel) {
+            const chan = await member.guild.channels.fetch(verifyChannel.id).catch(() => null);
+            if (chan) {
+              await chan.delete('Oreo: Verifizierung abgelaufen').catch(() => null);
+            }
           }
+        } catch (timeoutErr) {
+          console.error('[captcha-timeout] Fehler waehrend des Verifizierungs-Timeouts:', timeoutErr);
         }
       }, 15 * 60 * 1000);
     }
