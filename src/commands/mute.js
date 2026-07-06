@@ -126,6 +126,13 @@ module.exports = {
     } catch (err) {
       console.error('createCase failed:', err);
       caseNumber = null;
+      if (expiresAt) {
+        await targetMember.roles.remove(role, 'Oreo: Temp-Mute zurückgenommen (Datenbankfehler)').catch(() => null);
+        return interaction.reply({
+          content: '❌ Datenbankfehler — der Temp-Mute wurde **zurückgenommen**, damit er nicht versehentlich permanent wird. Versuch es später erneut.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
     }
 
     const muteMsg = durationMs

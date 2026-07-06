@@ -110,6 +110,14 @@ module.exports = {
     } catch (err) {
       console.error('createCase failed:', err);
       caseNumber = null;
+      if (expiresAt) {
+        // Ohne Case-Row kann der Background-Loop nie entbannen → Temp-Ban zurücknehmen.
+        await interaction.guild.members.unban(target.id, 'Oreo: Temp-Ban zurückgenommen (Datenbankfehler)').catch(() => null);
+        return interaction.reply({
+          content: '❌ Datenbankfehler — der Temp-Ban wurde **zurückgenommen**, damit er nicht versehentlich permanent wird. Versuch es später erneut.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
     }
 
     const banMessage = durationMs 
