@@ -1,4 +1,5 @@
 const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000; // 28 days — Discord API limit
+const MAX_TEMP_MS = 365 * 24 * 60 * 60 * 1000; // Obergrenze für Temp-Ban/Temp-Mute
 
 /**
  * Parses a duration string like "30s", "10m", "2h", "1t", "1w".
@@ -6,11 +7,11 @@ const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000; // 28 days — Discord API limi
  * "t" is German "Tag" (day).
  */
 function parseDuration(str) {
-  const match = str.trim().match(/^(\d+)\s*(s|m|h|t|w)$/i);
+  const match = str.trim().match(/^(\d+)\s*(s|m|h|t|d|w)$/i);
   if (!match) return null;
   const value = parseInt(match[1], 10);
   const unit = match[2].toLowerCase();
-  const multipliers = { s: 1000, m: 60_000, h: 3_600_000, t: 86_400_000, w: 604_800_000 };
+  const multipliers = { s: 1000, m: 60_000, h: 3_600_000, t: 86_400_000, d: 86_400_000, w: 604_800_000 };
   return value * multipliers[unit];
 }
 
@@ -30,4 +31,4 @@ function formatDuration(ms) {
   return `${seconds} ${seconds === 1 ? 'Sekunde' : 'Sekunden'}`;
 }
 
-module.exports = { parseDuration, formatDuration, MAX_TIMEOUT_MS };
+module.exports = { parseDuration, formatDuration, MAX_TIMEOUT_MS, MAX_TEMP_MS };

@@ -2,7 +2,7 @@ const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
 const config = require('../config');
 const { buildModLogEmbed } = require('../modlog');
-const { parseDuration } = require('../duration');
+const { parseDuration, MAX_TEMP_MS } = require('../duration');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -39,6 +39,12 @@ module.exports = {
       if (!durationMs) {
         return interaction.reply({
           content: '❌ Ungültige Dauer. Nutze z.B. `30s`, `10m`, `2h`, `7d`.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      if (durationMs > MAX_TEMP_MS) {
+        return interaction.reply({
+          content: '❌ Die maximale Temp-Ban-Dauer beträgt 365 Tage. Für länger nutze einen permanenten Ban.',
           flags: MessageFlags.Ephemeral,
         });
       }
