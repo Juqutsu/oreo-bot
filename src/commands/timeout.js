@@ -21,7 +21,7 @@ module.exports = {
       option.setName('reason').setDescription('Grund für den Timeout.').setMaxLength(512).setRequired(false),
     ),
 
-  requiredTier: 'moderator',
+  requiredTier: 'supporter',
 
   async execute(interaction) {
     const target = interaction.options.getUser('user');

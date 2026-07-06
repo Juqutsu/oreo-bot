@@ -23,7 +23,7 @@ module.exports = {
         )
     ),
 
-  requiredTier: 'owner',
+  requiredTier: 'moderator',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');

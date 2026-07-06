@@ -10,7 +10,7 @@ module.exports = {
     .addUserOption((option) => option.setName('target').setDescription('Wer soll soft-gebannt werden?').setRequired(true))
     .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Softban').setMaxLength(512).setRequired(false)),
 
-  requiredTier: 'owner',
+  requiredTier: 'moderator',
 
   async execute(interaction) {
     const target = interaction.options.getUser('target');
