@@ -8,7 +8,7 @@ module.exports = {
     .setName('unmute')
     .setDescription('Hebt die Stummschaltung (Mute-Rolle) eines Nutzers auf.')
     .addUserOption((o) => o.setName('target').setDescription('Wer soll entstummt werden?').setRequired(true))
-    .addStringOption((o) => o.setName('reason').setDescription('Grund für die Entstummung').setRequired(false)),
+    .addStringOption((o) => o.setName('reason').setDescription('Grund für die Entstummung').setMaxLength(512).setRequired(false)),
 
   requiredTier: 'moderator',
 

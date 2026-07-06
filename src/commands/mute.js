@@ -11,7 +11,7 @@ module.exports = {
     .setDescription('Stummschaltet einen Nutzer serverweit (über Mute-Rolle).')
     .addUserOption((o) => o.setName('target').setDescription('Wer soll stummgeschaltet werden?').setRequired(true))
     .addStringOption((o) => o.setName('duration').setDescription('Optional: Dauer (z.B. 30m, 2h, 7d, 90d)').setRequired(false))
-    .addStringOption((o) => o.setName('reason').setDescription('Grund für die Stummschaltung').setRequired(false)),
+    .addStringOption((o) => o.setName('reason').setDescription('Grund für die Stummschaltung').setMaxLength(512).setRequired(false)),
 
   requiredTier: 'moderator',
 

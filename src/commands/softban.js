@@ -8,7 +8,7 @@ module.exports = {
     .setName('softban')
     .setDescription('Bannt einen Nutzer und entbannt ihn sofort wieder, um Nachrichten zu löschen.')
     .addUserOption((option) => option.setName('target').setDescription('Wer soll soft-gebannt werden?').setRequired(true))
-    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Softban').setRequired(false)),
+    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Softban').setMaxLength(512).setRequired(false)),
 
   requiredTier: 'owner',
 

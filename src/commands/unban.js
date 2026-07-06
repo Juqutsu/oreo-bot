@@ -15,7 +15,7 @@ module.exports = {
         .setAutocomplete(true),
     )
     .addStringOption((reason) =>
-      reason.setName('reason').setDescription('Grund für die Entbannung').setRequired(false),
+      reason.setName('reason').setDescription('Grund für die Entbannung').setMaxLength(512).setRequired(false),
     ),
 
   requiredTier: 'owner',

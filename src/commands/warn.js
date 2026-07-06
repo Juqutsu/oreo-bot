@@ -9,7 +9,7 @@ module.exports = {
     .setName('warn')
     .setDescription('Verwarnt einen Nutzer und speichert es als Case.')
     .addUserOption((option) => option.setName('target').setDescription('Wer soll verwarnt werden?').setRequired(true))
-    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Verwarnung').setRequired(false)),
+    .addStringOption((option) => option.setName('reason').setDescription('Grund für die Verwarnung').setMaxLength(512).setRequired(false)),
 
   requiredTier: 'moderator',
 

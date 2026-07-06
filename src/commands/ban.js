@@ -10,7 +10,7 @@ module.exports = {
     .setDescription('Bannt einen Nutzer vom Server.')
     .addUserOption((option) => option.setName('target').setDescription('Wer soll gebannt werden?').setRequired(true))
     .addStringOption((option) => option.setName('duration').setDescription('Optional: Dauer des Bans (z.B. 30m, 2h, 7d)').setRequired(false))
-    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setRequired(false))
+    .addStringOption((reason) => reason.setName('reason').setDescription('Grund für den Ban').setMaxLength(512).setRequired(false))
     .addStringOption((option) =>
       option.setName('delete_messages')
         .setDescription('Optional: Verlauf der gelöschten Nachrichten des Nutzers')

@@ -45,7 +45,7 @@ module.exports = {
     .setDescription('Meldet einen User an die Moderation.')
     .setDMPermission(false)
     .addUserOption(o => o.setName('user').setDescription('Wer soll gemeldet werden?').setRequired(true))
-    .addStringOption(o => o.setName('reason').setDescription('Was ist passiert? (max 500 Zeichen)').setRequired(true).setMaxLength(500))
+    .addStringOption(o => o.setName('reason').setDescription('Was ist passiert? (max 512 Zeichen)').setRequired(true).setMaxLength(512))
     .addStringOption(o => o.setName('evidence_url').setDescription('Optional: Link zu Screenshot oder Nachricht').setRequired(false).setMaxLength(500)),
 
   // KEIN requiredTier — jeder Member darf reporten

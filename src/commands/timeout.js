@@ -18,7 +18,7 @@ module.exports = {
         .setRequired(false),
     )
     .addStringOption(option =>
-      option.setName('reason').setDescription('Grund für den Timeout.').setRequired(false),
+      option.setName('reason').setDescription('Grund für den Timeout.').setMaxLength(512).setRequired(false),
     ),
 
   requiredTier: 'moderator',
