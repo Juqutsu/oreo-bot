@@ -27,6 +27,14 @@ for (const [key, value] of Object.entries(required)) {
   }
 }
 
+process.on('unhandledRejection', (err) => {
+  console.error('[process] Unhandled promise rejection:', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[process] Uncaught exception — exiting:', err);
+  process.exit(1);
+});
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -39,7 +47,7 @@ const client = new Client({
     GatewayIntentBits.GuildInvites,
     GatewayIntentBits.GuildModeration,
   ],
-  partials: [Partials.Message],
+  partials: [Partials.Message, Partials.GuildMember, Partials.User],
 });
 
 const { addSpeechEvent } = require('discord-speech-recognition');

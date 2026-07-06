@@ -23,8 +23,12 @@ function loadEvents(client) {
       console.warn(`[loadEvents] skipping ${file}: missing name or execute`);
       continue;
     }
-    if (event.once) client.once(event.name, (...args) => event.execute(...args));
-    else            client.on(event.name,   (...args) => event.execute(...args));
+    const run = (...args) =>
+      Promise.resolve(event.execute(...args)).catch((err) =>
+        console.error(`[events] Handler ${file} (${String(event.name)}) failed:`, err),
+      );
+    if (event.once) client.once(event.name, run);
+    else            client.on(event.name,   run);
     count++;
   }
   return count;
