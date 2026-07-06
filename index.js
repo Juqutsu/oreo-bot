@@ -99,6 +99,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isAutocomplete()) {
       if (typeof command.autocomplete !== 'function') return;
+      if (command.requiredTier) {
+        const allowed = await perms
+          .hasTier(interaction.guildId, interaction.member, command.requiredTier)
+          .catch(() => false);
+        if (!allowed) {
+          await interaction.respond([]).catch(() => {});
+          return;
+        }
+      }
       try {
         await command.autocomplete(interaction);
       } catch (err) {
