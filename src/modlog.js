@@ -226,7 +226,7 @@ async function sendModLog(interaction, embedParams) {
     const channelId = await config.getModLogChannelId(interaction.guildId);
     if (!channelId) {
       await interaction.followUp({
-        content: '⚠️ Mod-Log-Channel ist nicht konfiguriert (/setup) — die Aktion wurde NICHT geloggt.',
+        content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#channel>` ausführen — die Aktion wurde NICHT geloggt.',
         flags: MessageFlags.Ephemeral,
       }).catch(() => null);
       return;
