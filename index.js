@@ -35,8 +35,8 @@ const DEFAULT_INTERACTION_ERROR = '❌ Beim Ausführen ist ein Fehler aufgetrete
 // gets an editReply instead of silently stranding the user on the spinner.
 async function sendInteractionError(interaction, content = DEFAULT_INTERACTION_ERROR) {
   const payload = { content, flags: MessageFlags.Ephemeral };
-  if (interaction.deferred) return interaction.editReply(payload).catch(() => null);
   if (interaction.replied) return interaction.followUp(payload).catch(() => null);
+  if (interaction.deferred) return interaction.editReply(payload).catch(() => null);
   return interaction.reply(payload).catch(() => null);
 }
 

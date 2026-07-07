@@ -342,6 +342,12 @@ async function handleModalResolve(interaction, reportId, action) {
       return interaction.editReply({ content: `Konnte ${actionLabel(action)} nicht ausführen: ${e?.message ?? 'Discord-Fehler'}.` });
     }
 
+    // Alte aktive Ban-Rows deaktivieren (analog zu ban.js), damit ein späterer
+    // permanenter Re-Ban nicht durch eine abgelaufene Temp-Ban-Row automatisch entbannt wird.
+    if (action === 'ban') {
+      await cases.deactivateActiveInfractions(interaction.guildId, targetId, 'ban').catch((err) => console.error('[report] Deactivating old ban rows failed:', err));
+    }
+
     // 5. Create Case
     try {
       const result = await cases.createCase({

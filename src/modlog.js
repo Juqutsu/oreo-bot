@@ -233,6 +233,10 @@ async function sendModLog(interaction, embedParams) {
     }
     const logChannel = await interaction.client.channels.fetch(channelId);
     const embed = embedParams.embed ?? buildModLogEmbed(embedParams);
+    if (!embed) {
+      console.warn(`ModLog send skipped: no embed built for action="${embedParams.action}"`);
+      return;
+    }
     await logChannel.send({ embeds: [embed] });
   } catch (e) {
     console.warn('ModLog send failed:', e);
