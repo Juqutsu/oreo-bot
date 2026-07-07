@@ -235,13 +235,20 @@ async function execute(member) {
     if (hasActiveMute) {
       const mutedRole = await getMutedRole(member.guild);
       if (mutedRole) {
-        await member.roles.add(mutedRole, 'Oreo: Aktiver Mute — Rolle nach Rejoin wieder angewendet').catch(() => null);
+        const reapplied = await member.roles.add(mutedRole, 'Oreo: Aktiver Mute — Rolle nach Rejoin wieder angewendet').then(() => true).catch((err) => {
+          console.error('[guildMemberAdd] Re-applying muted role failed:', err);
+          return false;
+        });
 
         const logChannelId = await config.getModLogChannelId(guildId);
         if (logChannelId) {
           const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
           if (logChannel) {
-            await logChannel.send(`🔇 <@${member.id}> ist mit aktivem Mute erneut beigetreten — Muted-Rolle wieder angewendet.`).catch(() => null);
+            if (reapplied) {
+              await logChannel.send(`🔇 <@${member.id}> ist mit aktivem Mute erneut beigetreten — Muted-Rolle wieder angewendet.`).catch(() => null);
+            } else {
+              await logChannel.send(`⚠️ <@${member.id}> ist mit aktivem Mute erneut beigetreten, aber die Muted-Rolle konnte NICHT wieder angewendet werden — prüfe Bot-Berechtigungen/Rollen-Hierarchie.`).catch(() => null);
+            }
           }
         }
       }
