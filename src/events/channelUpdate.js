@@ -1,5 +1,6 @@
 const { Events, EmbedBuilder, AuditLogEvent } = require('discord.js');
 const config = require('../config');
+const { resolveAuditExecutor } = require('../auditExecutor');
 
 async function execute(oldChannel, newChannel) {
   if (!newChannel.guild) return;
@@ -20,22 +21,10 @@ async function execute(oldChannel, newChannel) {
 
     if (!nameChanged && !parentChanged && !nsfwChanged && !slowmodeChanged && !topicChanged) return;
 
-    let executorTag = null;
-    try {
-      const auditLogs = await newChannel.guild.fetchAuditLogs({
-        type: AuditLogEvent.ChannelUpdate,
-        limit: 5,
-      });
-      const logEntry = [...auditLogs.entries.values()].find(
-        entry => entry.targetId === newChannel.id &&
-                 (Date.now() - entry.createdTimestamp) < 10000
-      );
-      if (logEntry && logEntry.executor) {
-        executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
-      }
-    } catch (err) {
-      console.warn('[channel-log] Failed to fetch audit logs for channel update:', err);
-    }
+    const auditResult = await resolveAuditExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id, {
+      logContext: '[channel-log] Failed to fetch audit logs for channel update:',
+    });
+    const executorTag = auditResult?.executorTag ?? null;
 
     const embed = new EmbedBuilder()
       .setTitle('📺 Channel bearbeitet')

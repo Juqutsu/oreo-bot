@@ -1,5 +1,6 @@
 const { Events, EmbedBuilder, AuditLogEvent } = require('discord.js');
 const config = require('../config');
+const { resolveAuditExecutor } = require('../auditExecutor');
 
 const VERIFICATION_LEVEL_LABELS = {
   0: 'Keine',
@@ -27,19 +28,12 @@ async function execute(oldGuild, newGuild) {
 
     if (!nameChanged && !iconChanged && !ownerChanged && !verificationChanged && !systemChannelChanged) return;
 
-    let executorTag = null;
-    try {
-      const auditLogs = await newGuild.fetchAuditLogs({
-        type: AuditLogEvent.GuildUpdate,
-        limit: 5,
-      });
-      const logEntry = auditLogs.entries.first();
-      if (logEntry && (Date.now() - logEntry.createdTimestamp) < 10000) {
-        executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
-      }
-    } catch (err) {
-      console.warn('[guild-log] Failed to fetch audit logs for guild update:', err);
-    }
+    // GuildUpdate audit-log entries always target the guild itself (targetId === guild.id),
+    // so matching on newGuild.id is equivalent to the previous entries.first() lookup.
+    const auditResult = await resolveAuditExecutor(newGuild, AuditLogEvent.GuildUpdate, newGuild.id, {
+      logContext: '[guild-log] Failed to fetch audit logs for guild update:',
+    });
+    const executorTag = auditResult?.executorTag ?? null;
 
     const embed = new EmbedBuilder()
       .setTitle('🌐 Servereinstellungen geändert')

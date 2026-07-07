@@ -1,5 +1,6 @@
 const { Events, EmbedBuilder, AuditLogEvent, ChannelType } = require('discord.js');
 const config = require('../config');
+const { resolveAuditExecutor } = require('../auditExecutor');
 
 const CHANNEL_TYPE_LABELS = {
   [ChannelType.GuildText]: 'Textkanal',
@@ -22,22 +23,10 @@ async function execute(channel) {
     const logChannel = await channel.guild.channels.fetch(serverLogChannelId).catch(() => null);
     if (!logChannel) return;
 
-    let executorTag = null;
-    try {
-      const auditLogs = await channel.guild.fetchAuditLogs({
-        type: AuditLogEvent.ChannelCreate,
-        limit: 5,
-      });
-      const logEntry = [...auditLogs.entries.values()].find(
-        entry => entry.targetId === channel.id &&
-                 (Date.now() - entry.createdTimestamp) < 10000
-      );
-      if (logEntry && logEntry.executor) {
-        executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
-      }
-    } catch (err) {
-      console.warn('[channel-log] Failed to fetch audit logs for channel create:', err);
-    }
+    const auditResult = await resolveAuditExecutor(channel.guild, AuditLogEvent.ChannelCreate, channel.id, {
+      logContext: '[channel-log] Failed to fetch audit logs for channel create:',
+    });
+    const executorTag = auditResult?.executorTag ?? null;
 
     const typeLabel = CHANNEL_TYPE_LABELS[channel.type] ?? 'Unbekannt';
     const parentLabel = channel.parent ? `${channel.parent.name}` : 'Keine';

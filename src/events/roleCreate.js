@@ -1,5 +1,6 @@
 const { Events, EmbedBuilder, AuditLogEvent } = require('discord.js');
 const config = require('../config');
+const { resolveAuditExecutor } = require('../auditExecutor');
 
 async function execute(role) {
   const guildId = role.guild.id;
@@ -14,22 +15,10 @@ async function execute(role) {
     const logChannel = await role.guild.channels.fetch(serverLogChannelId).catch(() => null);
     if (!logChannel) return;
 
-    let executorTag = null;
-    try {
-      const auditLogs = await role.guild.fetchAuditLogs({
-        type: AuditLogEvent.RoleCreate,
-        limit: 5,
-      });
-      const logEntry = [...auditLogs.entries.values()].find(
-        entry => entry.targetId === role.id &&
-                 (Date.now() - entry.createdTimestamp) < 10000
-      );
-      if (logEntry && logEntry.executor) {
-        executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
-      }
-    } catch (err) {
-      console.warn('[role-log] Failed to fetch audit logs for role create:', err);
-    }
+    const auditResult = await resolveAuditExecutor(role.guild, AuditLogEvent.RoleCreate, role.id, {
+      logContext: '[role-log] Failed to fetch audit logs for role create:',
+    });
+    const executorTag = auditResult?.executorTag ?? null;
 
     const embed = new EmbedBuilder()
       .setTitle('🛡️ Rolle erstellt')

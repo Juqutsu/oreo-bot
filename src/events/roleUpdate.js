@@ -1,5 +1,6 @@
 const { Events, EmbedBuilder, AuditLogEvent } = require('discord.js');
 const config = require('../config');
+const { resolveAuditExecutor } = require('../auditExecutor');
 
 async function execute(oldRole, newRole) {
   const guildId = newRole.guild.id;
@@ -26,22 +27,10 @@ async function execute(oldRole, newRole) {
 
     if (!nameChanged && !colorChanged && !hoistChanged && !mentionChanged && !permissionsChanged) return;
 
-    let executorTag = null;
-    try {
-      const auditLogs = await newRole.guild.fetchAuditLogs({
-        type: AuditLogEvent.RoleUpdate,
-        limit: 5,
-      });
-      const logEntry = [...auditLogs.entries.values()].find(
-        entry => entry.targetId === newRole.id &&
-                 (Date.now() - entry.createdTimestamp) < 10000
-      );
-      if (logEntry && logEntry.executor) {
-        executorTag = `<@${logEntry.executor.id}> (${logEntry.executor.tag})`;
-      }
-    } catch (err) {
-      console.warn('[role-log] Failed to fetch audit logs for role update:', err);
-    }
+    const auditResult = await resolveAuditExecutor(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id, {
+      logContext: '[role-log] Failed to fetch audit logs for role update:',
+    });
+    const executorTag = auditResult?.executorTag ?? null;
 
     const embed = new EmbedBuilder()
       .setTitle('🛡️ Rolle bearbeitet')
