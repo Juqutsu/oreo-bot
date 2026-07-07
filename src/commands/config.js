@@ -263,6 +263,10 @@ module.exports = {
 
   requiredTier: 'owner',
 
+  // Only `welcome edit` / `leave edit` show a modal directly (no defer possible before
+  // showModal()) — every other subcommand goes through the normal auto-defer path.
+  showsModal: (interaction) => interaction.options.getSubcommand(false) === 'edit',
+
   async execute(interaction) {
     const group = interaction.options.getSubcommandGroup(false);
     const sub = interaction.options.getSubcommand();

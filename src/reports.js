@@ -18,6 +18,16 @@ async function attachMessageId(reportId, messageId) {
   await pool.query(`UPDATE reports SET message_id = ? WHERE id = ?`, [messageId, reportId]);
 }
 
+/**
+ * Compensating delete for a report row that never made it to the report channel
+ * (channel missing or send failed). Without this, the orphaned row would keep
+ * blocking retries via hasOpenReportFromTo forever.
+ */
+async function deleteReport(reportId, { conn = null } = {}) {
+  const runner = conn ?? getPool();
+  await runner.query(`DELETE FROM reports WHERE id = ?`, [reportId]);
+}
+
 async function getReport(reportId, { forUpdate = false, conn = null } = {}) {
   if (forUpdate && !conn) {
     throw new Error('getReport: forUpdate requires a caller-supplied conn (transaction)');
@@ -108,6 +118,7 @@ async function getReportByCaseNumber(guildId, caseNumber) {
 module.exports = {
   createReport,
   attachMessageId,
+  deleteReport,
   getReport,
   hasOpenReportFromTo,
   claimReport,

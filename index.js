@@ -27,6 +27,19 @@ for (const [key, value] of Object.entries(required)) {
   }
 }
 
+const DEFAULT_INTERACTION_ERROR = '❌ Beim Ausführen ist ein Fehler aufgetreten. Versuch es später erneut.';
+
+// Single reply path for every "something went wrong" catch block below: picks the
+// right Discord API call for whatever state the interaction is already in, so a
+// deferred interaction (e.g. a component dispatcher mid-handleModalResolve) always
+// gets an editReply instead of silently stranding the user on the spinner.
+async function sendInteractionError(interaction, content = DEFAULT_INTERACTION_ERROR) {
+  const payload = { content, flags: MessageFlags.Ephemeral };
+  if (interaction.deferred) return interaction.editReply(payload).catch(() => null);
+  if (interaction.replied) return interaction.followUp(payload).catch(() => null);
+  return interaction.reply(payload).catch(() => null);
+}
+
 process.on('unhandledRejection', (err) => {
   console.error('[process] Unhandled promise rejection:', err);
 });
@@ -124,9 +137,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // Auto-defer all slash commands except announcement and config edit subcommands (which need to show modal first)
-    const isConfigEdit = interaction.commandName === 'config' && interaction.options.getSubcommand(false) === 'edit';
-    if (interaction.isChatInputCommand() && interaction.commandName !== 'announcement' && !isConfigEdit) {
+    // Auto-defer all slash commands except ones that need to show a modal first.
+    // Commands declare this via `showsModal` (boolean, or a function for per-subcommand
+    // cases) instead of being hard-coded here — new modal commands never touch index.js.
+    const skipDefer = typeof command.showsModal === 'function'
+      ? command.showsModal(interaction)
+      : command.showsModal === true;
+    if (interaction.isChatInputCommand() && !skipDefer) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
     }
 
@@ -136,14 +153,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         allowed = await perms.requireTier(interaction, command.requiredTier);
       } catch (err) {
         console.error(`Tier-Check für "${interaction.commandName}" fehlgeschlagen:`, err);
-        const reply = { content: 'Beim Ausführen des Commands ist etwas schiefgegangen.', flags: MessageFlags.Ephemeral };
-        if (interaction.deferred && !interaction.replied) {
-          await interaction.editReply(reply).catch(() => {});
-        } else if (interaction.replied) {
-          await interaction.followUp(reply).catch(() => {});
-        } else {
-          await interaction.reply(reply).catch(() => {});
-        }
+        await sendInteractionError(interaction, 'Beim Ausführen des Commands ist etwas schiefgegangen.');
         return;
       }
       if (!allowed) {
@@ -156,14 +166,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await command.execute(interaction);
     } catch (err) {
       console.error(`Command "${interaction.commandName}" failed:`, err);
-      const reply = { content: 'Beim Ausführen des Commands ist etwas schiefgegangen.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred && !interaction.replied) {
-        await interaction.editReply(reply).catch(() => {});
-      } else if (interaction.replied) {
-        await interaction.followUp(reply).catch(() => {});
-      } else {
-        await interaction.reply(reply).catch(() => {});
-      }
+      await sendInteractionError(interaction, 'Beim Ausführen des Commands ist etwas schiefgegangen.');
     }
     return;
   }
@@ -182,9 +185,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // const handled = await reportInteractions.dispatch(interaction) || await escalationInteractions.dispatch(interaction);
     } catch (e) {
       console.error('[interactions] dispatch error', e);
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: 'Fehler bei der Verarbeitung.', flags: MessageFlags.Ephemeral }).catch(() => {});
-      }
+      await sendInteractionError(interaction, 'Fehler bei der Verarbeitung.');
     }
     return;
   }

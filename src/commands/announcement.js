@@ -27,6 +27,10 @@ module.exports = {
 
   requiredTier: 'moderator',
 
+  // Shows a modal directly (no defer possible before showModal()) — see index.js's
+  // auto-defer skip logic.
+  showsModal: true,
+
   async execute(interaction) {
     const targetChannel = interaction.options.getChannel('channel') ?? interaction.channel;
 

@@ -124,10 +124,17 @@ module.exports = {
     }
 
     // 6) post embed in report_channel
+    // NOTE: the row is already inserted (step 5) because the embed title and the button
+    // customIds need reportId. If posting fails below, the row is compensated (deleted)
+    // rather than reordering insert-after-send — reordering would require building the
+    // message without an id, then a second edit to add it, which is more churn than a
+    // single delete on the failure path.
     const reportChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
     if (!reportChannel) {
+      await reports.deleteReport(reportId).catch((delErr) =>
+        console.error('[report] deleteReport (channel missing) failed for reportId=' + reportId, delErr));
       return interaction.reply({
-        content: 'Der konfigurierte Report-Channel existiert nicht mehr. Bitte Admin informieren.',
+        content: '❌ Der Report-Channel ist nicht (mehr) verfügbar — dein Report wurde NICHT gespeichert. Bitte informiere das Server-Team direkt.',
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -140,8 +147,10 @@ module.exports = {
       msg = await reportChannel.send({ embeds: [embed], components: [row] });
     } catch (e) {
       console.warn('[report] cannot post to report channel', e?.code || e);
+      await reports.deleteReport(reportId).catch((delErr) =>
+        console.error('[report] deleteReport (send failed) failed for reportId=' + reportId, delErr));
       return interaction.reply({
-        content: 'Der Bot kann nicht in den Report-Channel posten. Bitte Admin informieren.',
+        content: '❌ Der Report-Channel ist nicht (mehr) verfügbar — dein Report wurde NICHT gespeichert. Bitte informiere das Server-Team direkt.',
         flags: MessageFlags.Ephemeral,
       });
     }

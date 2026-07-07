@@ -13,6 +13,7 @@ const reports = require('../reports');
 const perms = require('../perms');
 const config = require('../config');
 const cases = require('../cases');
+const escalations = require('../escalations');
 const { parseDuration, MAX_TIMEOUT_MS } = require('../duration');
 const { getPool } = require('../db');
 const { buildModLogEmbed } = require('../modlog');
@@ -358,6 +359,16 @@ async function handleModalResolve(interaction, reportId, action) {
       return interaction.editReply({
         content: `Aktion ${actionLabel(action)} wurde ausgeführt, aber Case-Erstellung fehlgeschlagen — bitte manuell mit \`/reason\` nachtragen.`,
       });
+    }
+
+    // Auto-Eskalation (nur bei warn — analoge Sequenz zu warn.js)
+    if (action === 'warn') {
+      try {
+        const activeWarnCount = await cases.countActiveWarnings(interaction.guildId, targetId);
+        await escalations.applyEscalation({ interaction, target: targetUser, activeWarnCount });
+      } catch (err) {
+        console.warn('[report] Escalation failed:', err);
+      }
     }
   }
 
