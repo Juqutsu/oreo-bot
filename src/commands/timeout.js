@@ -76,7 +76,12 @@ module.exports = {
       caseNumber = result.caseNumber;
     } catch (err) {
       console.error('createCase failed:', err);
-      caseNumber = null;
+      // Ohne Case-Row bliebe der Timeout ein untracked Phantom-Punishment — zurücknehmen.
+      await targetMember.timeout(null, 'Oreo: Timeout zurückgenommen (Datenbankfehler)').catch(() => null);
+      return interaction.reply({
+        content: '❌ Datenbankfehler — der Timeout wurde **zurückgenommen**, damit er nicht ohne Case-Eintrag bestehen bleibt. Versuch es später erneut.',
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     const durationLabel = formatDuration(durationMs);
