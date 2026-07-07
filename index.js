@@ -140,9 +140,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // Auto-defer all slash commands except ones that need to show a modal first.
     // Commands declare this via `showsModal` (boolean, or a function for per-subcommand
     // cases) instead of being hard-coded here — new modal commands never touch index.js.
-    const skipDefer = typeof command.showsModal === 'function'
-      ? command.showsModal(interaction)
-      : command.showsModal === true;
+    let skipDefer;
+    try {
+      skipDefer = typeof command.showsModal === 'function'
+        ? command.showsModal(interaction)
+        : command.showsModal === true;
+    } catch (err) {
+      console.error(`[interactions] showsModal check failed for ${interaction.commandName}:`, err);
+      skipDefer = false;
+    }
     if (interaction.isChatInputCommand() && !skipDefer) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
     }
