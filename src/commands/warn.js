@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
-const config = require('../config');
-const { buildModLogEmbed } = require('../modlog');
+const { sendModLog } = require('../modlog');
+const { validateModTarget } = require('../modGuards');
 const escalations = require('../escalations');
 
 module.exports = {
@@ -18,34 +18,13 @@ module.exports = {
     const reasonInput = interaction.options.getString('reason');
     const reasonForDisplay = reasonInput ?? 'Kein Grund angegeben';
 
-    const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
     const moderator = interaction.member;
-    const botMember = interaction.guild.members.me;
 
-    if (!targetMember) return interaction.reply({
-      content: 'Dieser User ist nicht (mehr) auf dem Server.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if (target.id === moderator.id) return interaction.reply({
-      content: 'Selbst-Verwarnung geht nicht.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if (target.id === botMember.id) return interaction.reply({
-      content: 'Oreo kann sich nicht selber verwarnen.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if (target.id === interaction.guild.ownerId) return interaction.reply({
-      content: 'Den Server-Inhaber kannst du nicht verwarnen.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if (moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) return interaction.reply({
-      content: 'Diese Person hat dieselbe oder eine höhere Rolle als du.',
-      flags: MessageFlags.Ephemeral,
-    });
+    // Standard guards (member required, self/bot/owner/hierarchy).
+    const guard = await validateModTarget(interaction, target, { action: 'warn' });
+    if (!guard.ok) {
+      return interaction.reply({ content: guard.message, flags: MessageFlags.Ephemeral });
+    }
 
     // 1. Case in DB schreiben (wenn das failt, brechen wir komplett ab).
     let caseNumber;
@@ -90,32 +69,14 @@ module.exports = {
     });
 
     // 4. Mod-Log-Embed (Best-Effort).
-    try {
-      const channelId = await config.getModLogChannelId(interaction.guildId);
-      if (!channelId) {
-        await interaction.followUp({
-          content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#x>` ausführen.',
-          flags: MessageFlags.Ephemeral,
-        });
-      } else {
-        const logChannel = await interaction.client.channels.fetch(channelId);
-        const modEmbed = buildModLogEmbed({
-          action: 'warn',
-          caseNumber,
-          target,
-          mod: moderator,
-          reason: reasonForDisplay,
-          dmFailed,
-        });
-        await logChannel.send({ embeds: [modEmbed] });
-      }
-    } catch (err) {
-      console.warn('ModLog send failed:', err);
-      await interaction.followUp({
-        content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await sendModLog(interaction, {
+      action: 'warn',
+      caseNumber,
+      target,
+      mod: moderator,
+      reason: reasonForDisplay,
+      dmFailed,
+    });
 
     // Auto-Eskalation
     try {

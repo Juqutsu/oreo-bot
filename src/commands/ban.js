@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
-const config = require('../config');
-const { buildModLogEmbed } = require('../modlog');
+const { sendModLog } = require('../modlog');
+const { validateModTarget } = require('../modGuards');
 const { parseDuration, MAX_TEMP_MS } = require('../duration');
 
 module.exports = {
@@ -49,34 +49,14 @@ module.exports = {
       }
     }
 
-    const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
     const moderator = interaction.member;
-    const botMember = interaction.guild.members.me;
 
-    if(target.id === moderator.id) return interaction.reply({ // Kann nicht selbst bannen
-      content: 'Selbst-Ban geht nicht.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(target.id === botMember.id) return interaction.reply({ // Kann bot nicht bannen
-      content: 'Oreo kann sich nicht selber bannen.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(target.id === interaction.guild.ownerId) return interaction.reply({ // Kann owner nicht bannen
-      content: 'Den Server-Inhaber kannst du nicht bannen.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(targetMember && moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) return interaction.reply({ // Mod Hierarchie
-      content: 'Diese Person hat dieselbe oder eine höhere Rolle als du.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(targetMember && !targetMember.bannable) return interaction.reply({ // Bot Hierarchie + Permission
-      content: 'Diese Person lässt sich nicht bannen. Vermutlich ist Oreos Rolle nicht hoch genug.',
-      flags: MessageFlags.Ephemeral,
-    });
+    // Standard guards (self/bot/owner/hierarchy/bannable) — ban works on non-members too.
+    const guard = await validateModTarget(interaction, target, { action: 'ban', requireMember: false });
+    if (!guard.ok) {
+      return interaction.reply({ content: guard.message, flags: MessageFlags.Ephemeral });
+    }
+    const targetMember = guard.targetMember;
 
     const deleteMessageSeconds = deleteMessagesInput ? parseInt(deleteMessagesInput, 10) : 0;
 
@@ -145,31 +125,13 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
-    try {
-      const channelId = await config.getModLogChannelId(interaction.guildId);
-      if (!channelId) {
-        await interaction.followUp({
-          content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#x>` ausführen.',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      const logChannel = await interaction.client.channels.fetch(channelId);
-      const modEmbed = buildModLogEmbed({
-        action: 'ban',
-        caseNumber,
-        target,
-        mod: moderator,
-        reason,
-        durationMs,
-      });
-      await logChannel.send({ embeds: [modEmbed] });
-    } catch (e) {
-      console.warn('ModLog send failed:', e);
-      await interaction.followUp({
-        content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await sendModLog(interaction, {
+      action: 'ban',
+      caseNumber,
+      target,
+      mod: moderator,
+      reason,
+      durationMs,
+    });
   },
 };

@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
-const config = require('../config');
-const { buildModLogEmbed } = require('../modlog');
+const { sendModLog } = require('../modlog');
+const { validateModTarget } = require('../modGuards');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -17,34 +17,15 @@ module.exports = {
     const target = interaction.options.getUser('target');
     const reason = interaction.options.getString('reason') ?? 'Kein Grund angegeben';
 
-    const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
     const moderator = interaction.member;
-    const botMember = interaction.guild.members.me;
 
-    if(target.id === moderator.id) return interaction.reply({ // Kann nicht selbst kicken
-      content: 'Selbst-Kick geht nicht.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(target.id === botMember.id) return interaction.reply({ // Kann bot nicht kicken
-      content: 'Oreo kann sich nicht selber kicken.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(target.id === interaction.guild.ownerId) return interaction.reply({ // Kann owner nicht kicken
-      content: 'Den Server-Inhaber kannst du nicht kicken.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(targetMember && moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) return interaction.reply({ // Mod Hierarchie
-      content: 'Diese Person hat dieselbe oder eine höhere Rolle als du.',
-      flags: MessageFlags.Ephemeral,
-    });
-
-    if(targetMember && !targetMember.kickable) return interaction.reply({ // Bot Hierarchie + Permission
-      content: 'Diese Person lässt sich nicht kicken. Vermutlich ist Oreos Rolle nicht hoch genug.',
-      flags: MessageFlags.Ephemeral,
-    });
+    // Standard guards (self/bot/owner/hierarchy/kickable). requireMember stays false:
+    // the previous inline guards also ran without a member (the kick itself fails then).
+    const guard = await validateModTarget(interaction, target, { action: 'kick', requireMember: false });
+    if (!guard.ok) {
+      return interaction.reply({ content: guard.message, flags: MessageFlags.Ephemeral });
+    }
+    const targetMember = guard.targetMember;
 
     // DM an Target (Best-Effort) — muss VOR dem Kick passieren, danach ist der User evtl. nicht mehr erreichbar.
     if (targetMember) {
@@ -89,31 +70,12 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
-    try {
-      const channelId = await config.getModLogChannelId(interaction.guildId);
-      if (!channelId) {
-        await interaction.followUp({
-          content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#x>` ausführen.',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      const logChannel = await interaction.client.channels.fetch(channelId);
-      const modEmbed = buildModLogEmbed({
-        action: 'kick',
-        caseNumber,
-        target,
-        mod: moderator,
-        reason,
-      });
-      await logChannel.send({ embeds: [modEmbed] });
-    } catch (e) {
-      console.warn('ModLog send failed:', e);
-      await interaction.followUp({
-        content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
-        flags: MessageFlags.Ephemeral,
-      });
-        }
-
+    await sendModLog(interaction, {
+      action: 'kick',
+      caseNumber,
+      target,
+      mod: moderator,
+      reason,
+    });
   },
 };

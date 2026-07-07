@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
-const config = require('../config');
-const { buildModLogEmbed } = require('../modlog');
+const { sendModLog } = require('../modlog');
+const { validateModTarget } = require('../modGuards');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -16,43 +16,12 @@ module.exports = {
     const target = interaction.options.getUser('target');
     const reason = interaction.options.getString('reason') ?? 'Kein Grund angegeben';
 
-    const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
     const moderator = interaction.member;
-    const botMember = interaction.guild.members.me;
 
-    if (target.id === moderator.id) {
-      return interaction.reply({
-        content: 'Selbst-Softban geht nicht.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    if (target.id === botMember.id) {
-      return interaction.reply({
-        content: 'Oreo kann sich nicht selber soft-bannen.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    if (target.id === interaction.guild.ownerId) {
-      return interaction.reply({
-        content: 'Den Server-Inhaber kannst du nicht soft-bannen.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    if (targetMember && moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) {
-      return interaction.reply({
-        content: 'Diese Person hat dieselbe oder eine höhere Rolle als du.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    if (targetMember && !targetMember.bannable) {
-      return interaction.reply({
-        content: 'Diese Person lässt sich nicht bannen/soft-bannen. Vermutlich ist Oreos Rolle nicht hoch genug.',
-        flags: MessageFlags.Ephemeral,
-      });
+    // Standard guards (self/bot/owner/hierarchy/bannable) — softban works on non-members too.
+    const guard = await validateModTarget(interaction, target, { action: 'softban', requireMember: false });
+    if (!guard.ok) {
+      return interaction.reply({ content: guard.message, flags: MessageFlags.Ephemeral });
     }
 
     try {
@@ -93,30 +62,12 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
-    try {
-      const channelId = await config.getModLogChannelId(interaction.guildId);
-      if (!channelId) {
-        await interaction.followUp({
-          content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#x>` ausführen.',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      const logChannel = await interaction.client.channels.fetch(channelId);
-      const modEmbed = buildModLogEmbed({
-        action: 'softban',
-        caseNumber,
-        target,
-        mod: moderator,
-        reason,
-      });
-      await logChannel.send({ embeds: [modEmbed] });
-    } catch (e) {
-      console.warn('ModLog send failed:', e);
-      await interaction.followUp({
-        content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await sendModLog(interaction, {
+      action: 'softban',
+      caseNumber,
+      target,
+      mod: moderator,
+      reason,
+    });
   },
 };

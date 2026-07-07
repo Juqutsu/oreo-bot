@@ -1,5 +1,6 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { formatDuration } = require('./duration');
+const config = require('./config');
 
 const COLOR_WARN = 0xfaa61a;
 const COLOR_TIMEOUT = 0xfaa61a;
@@ -205,4 +206,41 @@ function buildAutoModHitEmbed({
     .setTimestamp();
 }
 
-module.exports = { buildModLogEmbed, buildAutoModHitEmbed };
+/**
+ * Sends a mod-log embed for a slash-command interaction (best-effort).
+ *
+ * Encapsulates the tail every moderation command used to copy-paste:
+ * getModLogChannelId → warn (ephemeral followUp) if unset → channels.fetch →
+ * buildModLogEmbed → send → warn (ephemeral followUp) on failure.
+ *
+ * `embedParams` is forwarded to buildModLogEmbed. Commands with bespoke
+ * embeds (e.g. /removewarn, /reason) can pass a prebuilt EmbedBuilder via
+ * `embedParams.embed` instead.
+ *
+ * Never throws; failures are logged and reported to the moderator only.
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction
+ * @param {object} embedParams
+ */
+async function sendModLog(interaction, embedParams) {
+  try {
+    const channelId = await config.getModLogChannelId(interaction.guildId);
+    if (!channelId) {
+      await interaction.followUp({
+        content: '⚠️ Mod-Log-Channel ist nicht konfiguriert (/setup) — die Aktion wurde NICHT geloggt.',
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => null);
+      return;
+    }
+    const logChannel = await interaction.client.channels.fetch(channelId);
+    const embed = embedParams.embed ?? buildModLogEmbed(embedParams);
+    await logChannel.send({ embeds: [embed] });
+  } catch (e) {
+    console.warn('ModLog send failed:', e);
+    await interaction.followUp({
+      content: '⚠️ Mod-Log-Eintrag fehlgeschlagen — prüfe die Channel-Berechtigungen.',
+      flags: MessageFlags.Ephemeral,
+    }).catch(() => null);
+  }
+}
+
+module.exports = { buildModLogEmbed, buildAutoModHitEmbed, sendModLog };

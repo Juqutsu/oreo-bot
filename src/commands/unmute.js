@@ -1,7 +1,8 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
 const config = require('../config');
-const { buildModLogEmbed } = require('../modlog');
+const { sendModLog } = require('../modlog');
+const { validateModTarget } = require('../modGuards');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -17,37 +18,12 @@ module.exports = {
     const reason = interaction.options.getString('reason') ?? 'Kein Grund angegeben';
     const moderator = interaction.member;
 
-    const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
-    if (!targetMember) {
-      return interaction.reply({
-        content: 'Dieser User ist nicht (mehr) auf dem Server.',
-        flags: MessageFlags.Ephemeral,
-      });
+    // Standard guards (member required, self/owner/hierarchy — /unmute has no bot-self guard).
+    const guard = await validateModTarget(interaction, target, { action: 'unmute' });
+    if (!guard.ok) {
+      return interaction.reply({ content: guard.message, flags: MessageFlags.Ephemeral });
     }
-
-    // Self-unmute guard
-    if (target.id === moderator.id) {
-      return interaction.reply({
-        content: 'Du kannst dich nicht selbst entmuten.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    // Owner guard
-    if (target.id === interaction.guild.ownerId) {
-      return interaction.reply({
-        content: 'Der Server-Inhaber kann nicht entmutet werden.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    // Role hierarchy guard
-    if (moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) {
-      return interaction.reply({
-        content: 'Du kannst dieses Mitglied nicht entmuten (Rollen-Hierarchie).',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    const targetMember = guard.targetMember;
 
     const roleId = await config.getMutedRoleId(interaction.guildId);
     if (!roleId) {
@@ -102,21 +78,14 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
-    try {
-      const channelId = await config.getModLogChannelId(interaction.guildId);
-      if (channelId) {
-        const logChannel = await interaction.client.channels.fetch(channelId);
-        const modEmbed = buildModLogEmbed({
-          action: 'unmute',
-          caseNumber,
-          target,
-          mod: moderator,
-          reason,
-        });
-        await logChannel.send({ embeds: [modEmbed] });
-      }
-    } catch (e) {
-      console.warn('ModLog send failed:', e);
-    }
+    // Unlike before, this now also warns the moderator when the mod-log channel
+    // is unset or the send fails (previously /unmute skipped these warnings).
+    await sendModLog(interaction, {
+      action: 'unmute',
+      caseNumber,
+      target,
+      mod: moderator,
+      reason,
+    });
   },
 };

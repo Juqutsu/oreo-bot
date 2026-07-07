@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
-const config = require('../config');
+const { sendModLog } = require('../modlog');
 
 const META_TYPES = new Set(['warn_removed', 'reason_edited']);
 
@@ -85,36 +85,19 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
-    // 4. Mod-Log-Embed.
-    try {
-      const channelId = await config.getModLogChannelId(interaction.guildId);
-      if (!channelId) {
-        await interaction.followUp({
-          content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#x>` ausführen.',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      const logChannel = await interaction.client.channels.fetch(channelId);
-      const modEmbed = new EmbedBuilder()
-        .setTitle('📝 Grund editiert')
-        .setColor(0x5865f2)
-        .addFields(
-          { name: '👤 User', value: `<@${original.user_id}>`, inline: false },
-          { name: '🛡️ Moderator', value: `<@${moderator.id}>`, inline: false },
-          { name: '🔗 Original-Case', value: `#${originalCaseNumber}`, inline: true },
-          { name: '📝 Alt', value: oldReason ?? '(leer)', inline: false },
-          { name: '📝 Neu', value: newReason, inline: false },
-        )
-        .setFooter({ text: `Case #${metaCaseNumber} · 🐾` })
-        .setTimestamp();
-      await logChannel.send({ embeds: [modEmbed] });
-    } catch (err) {
-      console.warn('ModLog send failed:', err);
-      await interaction.followUp({
-        content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    // 4. Mod-Log-Embed — bespoke embed, passed prebuilt to sendModLog.
+    const modEmbed = new EmbedBuilder()
+      .setTitle('📝 Grund editiert')
+      .setColor(0x5865f2)
+      .addFields(
+        { name: '👤 User', value: `<@${original.user_id}>`, inline: false },
+        { name: '🛡️ Moderator', value: `<@${moderator.id}>`, inline: false },
+        { name: '🔗 Original-Case', value: `#${originalCaseNumber}`, inline: true },
+        { name: '📝 Alt', value: oldReason ?? '(leer)', inline: false },
+        { name: '📝 Neu', value: newReason, inline: false },
+      )
+      .setFooter({ text: `Case #${metaCaseNumber} · 🐾` })
+      .setTimestamp();
+    await sendModLog(interaction, { embed: modEmbed });
   },
 };

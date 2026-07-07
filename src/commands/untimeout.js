@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
-const config = require('../config');
-const { buildModLogEmbed } = require('../modlog');
+const { sendModLog } = require('../modlog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -75,30 +74,12 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
-    try {
-      const channelId = await config.getModLogChannelId(interaction.guildId);
-      if (!channelId) {
-        await interaction.followUp({
-          content: 'Mod-Log nicht konfiguriert. Admin: `/config channel set type:modlog channel:<#x>` ausführen.',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      const logChannel = await interaction.client.channels.fetch(channelId);
-      const modEmbed = buildModLogEmbed({
-        action: 'untimeout',
-        caseNumber,
-        target,
-        mod: moderator,
-        reason,
-      });
-      await logChannel.send({ embeds: [modEmbed] });
-    } catch (e) {
-      console.warn('ModLog send failed:', e);
-      await interaction.followUp({
-        content: 'Mod-Log-Eintrag fehlgeschlagen — Channel-Permission oder Channel-ID prüfen.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await sendModLog(interaction, {
+      action: 'untimeout',
+      caseNumber,
+      target,
+      mod: moderator,
+      reason,
+    });
   },
 };

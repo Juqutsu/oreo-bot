@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { getPool } = require('../db');
 
 module.exports = {
@@ -10,7 +10,9 @@ module.exports = {
     .addRoleOption((o) => o.setName('supporter-role').setDescription('Rolle für Tier supporter').setRequired(false)),
 
   // KEIN requiredTier — Bootstrap muss laufen, wenn role_permissions leer ist.
-  // Gate: Server-Owner-ID.
+  // Gate: Server-Owner-ID. Client-side visibility: administrators only —
+  // loadCommands.js reads defaultMemberPermissions generically.
+  defaultMemberPermissions: PermissionFlagsBits.Administrator,
 
   async execute(interaction) {
     const isDeveloper = process.env.DEVELOPER_ID && interaction.user.id === process.env.DEVELOPER_ID;

@@ -1,10 +1,19 @@
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { getPool } = require('./db');
 
 const TIERS = {
   supporter: 1,
   moderator: 2,
   owner: 3,
+};
+
+// Discord default_member_permissions per tier — controls client-side command
+// VISIBILITY only. Real authorization happens in requireTier (DB-backed
+// role_permissions). Used by loadCommands.js when registering slash commands.
+const TIER_PERMISSIONS = {
+  owner: PermissionFlagsBits.Administrator,
+  moderator: PermissionFlagsBits.BanMembers,
+  supporter: PermissionFlagsBits.ModerateMembers,
 };
 
 /**
@@ -134,6 +143,7 @@ async function requireTier(interaction, requiredTier) {
 
 module.exports = {
   TIERS,
+  TIER_PERMISSIONS,
   getEffectiveTier,
   hasTier,
   requireTier,
