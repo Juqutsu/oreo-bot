@@ -32,7 +32,6 @@ module.exports = {
     const deleteMessagesInput = interaction.options.getString('delete_messages');
 
     let durationMs = null;
-    let expiresAt = null;
 
     if (durationInput) {
       durationMs = parseDuration(durationInput);
@@ -48,7 +47,6 @@ module.exports = {
           flags: MessageFlags.Ephemeral,
         });
       }
-      expiresAt = new Date(Date.now() + durationMs);
     }
 
     const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
@@ -104,13 +102,13 @@ module.exports = {
         type: 'ban',
         reason: interaction.options.getString('reason'),
         durationMs: durationMs ? BigInt(durationMs) : null,
-        expiresAt,
+        expiresInMs: durationMs || null,
       });
       caseNumber = result.caseNumber;
     } catch (err) {
       console.error('createCase failed:', err);
       caseNumber = null;
-      if (expiresAt) {
+      if (durationMs) {
         // Ohne Case-Row kann der Background-Loop nie entbannen → Temp-Ban zurücknehmen.
         await interaction.guild.members.unban(target.id, 'Oreo: Temp-Ban zurückgenommen (Datenbankfehler)').catch(() => null);
         return interaction.reply({

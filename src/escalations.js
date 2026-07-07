@@ -123,7 +123,7 @@ async function applyEscalation({ interaction, target, activeWarnCount }) {
       type: action,
       reason,
       durationMs,
-      expiresAt: durationMs ? new Date(Date.now() + durationMs) : null,
+      expiresInMs: durationMs,
       source: 'escalation',
     });
     caseNumber = result.caseNumber;

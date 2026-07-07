@@ -38,7 +38,6 @@ async function checkChannelHopping(message, member) {
   const uniqueChannels = new Set(history.map((h) => h.channelId));
   if (uniqueChannels.size >= HOPPING_UNIQUE_CHANNELS_LIMIT) {
     const durationMs = 24 * 60 * 60 * 1000; // 24 hours
-    const expiresAt = new Date(Date.now() + durationMs);
     let caseNumber = null;
     const reason = 'Channel-Hopping Spam-Erkennung (Automatischer Timeout)';
 
@@ -65,7 +64,7 @@ async function checkChannelHopping(message, member) {
         reason,
         source: 'automod',
         durationMs: BigInt(durationMs),
-        expiresAt,
+        expiresInMs: durationMs,
       });
       caseNumber = result?.caseNumber;
     } catch (err) {
@@ -199,7 +198,6 @@ async function execute(message) {
         await cases.deactivateActiveInfractions(guildId, message.author.id, 'mute').catch(() => null);
 
         const durationMs = 10 * 60 * 1000;
-        const expiresAt = new Date(Date.now() + durationMs);
 
         const result = await cases.createCase({
           guildId,
@@ -209,7 +207,7 @@ async function execute(message) {
           reason,
           source: 'automod',
           durationMs: BigInt(durationMs),
-          expiresAt,
+          expiresInMs: durationMs,
         }).catch((err) => {
           console.error('[messageCreate] createCase mute failed:', err);
           return null;

@@ -105,7 +105,6 @@ module.exports = {
       });
     }
 
-    const expiresAtDate = new Date(Date.now() + durationMs);
     let caseNumber;
     try {
       const result = await cases.createCase({
@@ -115,7 +114,7 @@ module.exports = {
         type: 'timeout',
         reason: interaction.options.getString('reason'),
         durationMs: BigInt(durationMs),
-        expiresAt: expiresAtDate,
+        expiresInMs: durationMs,
       });
       caseNumber = result.caseNumber;
     } catch (err) {

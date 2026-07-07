@@ -350,7 +350,7 @@ async function handleModalResolve(interaction, reportId, action) {
         type: action,
         reason,
         durationMs: action === 'timeout' ? BigInt(durationMs) : undefined,
-        expiresAt:  action === 'timeout' ? new Date(Date.now() + durationMs) : undefined,
+        expiresInMs: action === 'timeout' ? durationMs : undefined,
       });
       caseNumber = result.caseNumber;
     } catch (e) {

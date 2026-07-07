@@ -14,6 +14,7 @@ async function createCase({
   reason = null,
   durationMs = null,
   expiresAt = null,
+  expiresInMs = null,
   source = 'manual',
   active = 1,
 }) {
@@ -35,11 +36,18 @@ async function createCase({
     const caseNumber = row.caseNumber;
 
     // 4. Infraction speichern.
+    // expires_at wird bevorzugt DB-seitig aus expiresInMs (Sekunden relativ zu NOW()) berechnet,
+    // damit mysql2 keinen JS-Date-Wert in Node-lokaler Zeit serialisiert (sonst Timezone-Skew
+    // gegenüber background.js, das mit MySQL NOW() vergleicht). Legacy expiresAt (JS Date)
+    // bleibt zur Rückwärtskompatibilität unterstützt, wenn expiresInMs nicht gesetzt ist.
+    const expiresSql = expiresInMs != null ? 'DATE_ADD(NOW(), INTERVAL ? SECOND)' : '?';
+    const expiresParam = expiresInMs != null ? Math.round(Number(expiresInMs) / 1000) : expiresAt;
+
     const [result] = await conn.execute(
       `INSERT INTO infractions
          (guild_id, case_number, user_id, moderator_id, type, source, reason, duration_ms, expires_at, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [guildId, caseNumber, userId, moderatorId, type, source, reason, durationMs, expiresAt, active],
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${expiresSql}, ?)`,
+      [guildId, caseNumber, userId, moderatorId, type, source, reason, durationMs, expiresParam, active],
     );
 
     // 5. Cross-Bot economy penalty (Ramen & Oreo synergy)

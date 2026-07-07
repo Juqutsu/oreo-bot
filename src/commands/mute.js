@@ -76,7 +76,6 @@ module.exports = {
     }
 
     let durationMs = null;
-    let expiresAt = null;
     if (durationInput) {
       durationMs = parseDuration(durationInput);
       if (!durationMs) {
@@ -91,7 +90,6 @@ module.exports = {
           flags: MessageFlags.Ephemeral,
         });
       }
-      expiresAt = new Date(Date.now() + durationMs);
     }
 
     try {
@@ -120,13 +118,13 @@ module.exports = {
         type: 'mute',
         reason: interaction.options.getString('reason'),
         durationMs: durationMs ? BigInt(durationMs) : null,
-        expiresAt,
+        expiresInMs: durationMs || null,
       });
       caseNumber = result.caseNumber;
     } catch (err) {
       console.error('createCase failed:', err);
       caseNumber = null;
-      if (expiresAt) {
+      if (durationMs) {
         await targetMember.roles.remove(role, 'Oreo: Temp-Mute zurückgenommen (Datenbankfehler)').catch(() => null);
         return interaction.reply({
           content: '❌ Datenbankfehler — der Temp-Mute wurde **zurückgenommen**, damit er nicht versehentlich permanent wird. Versuch es später erneut.',

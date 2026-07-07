@@ -10,7 +10,7 @@ async function execute(entry, guild) {
   let type = null;
   let actionLabel = null;
   let durationMs = null;
-  let expiresAt = null;
+  let expiresInMs = null;
 
   if (entry.action === AuditLogEvent.MemberBanAdd) {
     type = 'ban';
@@ -27,10 +27,15 @@ async function execute(entry, guild) {
       if (change.new) {
         type = 'timeout';
         actionLabel = 'timeout';
-        expiresAt = new Date(change.new);
-        durationMs = expiresAt.getTime() - entry.createdAt.getTime();
+        const expiresAtMs = new Date(change.new).getTime();
+        durationMs = expiresAtMs - entry.createdAt.getTime();
         // If durationMs is negative due to slight clock drift, normalize to 0
         if (durationMs < 0) durationMs = 0;
+        // expiresInMs is measured from "now" (handler run time), not entry.createdAt, so the
+        // DB-side DATE_ADD(NOW(), ...) in cases.js lands on the same absolute instant Discord
+        // set, regardless of any delay between the audit-log entry and this handler running.
+        expiresInMs = expiresAtMs - Date.now();
+        if (expiresInMs < 0) expiresInMs = 0;
       } else {
         type = 'untimeout';
         actionLabel = 'untimeout';
@@ -62,7 +67,7 @@ async function execute(entry, guild) {
       type,
       reason: entry.reason,
       durationMs,
-      expiresAt,
+      expiresInMs,
       source: 'manual',
     });
     caseNumber = result.caseNumber;
