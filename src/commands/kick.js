@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 const config = require('../config');
 const { buildModLogEmbed } = require('../modlog');
@@ -46,10 +46,21 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
 
+    // DM an Target (Best-Effort) — muss VOR dem Kick passieren, danach ist der User evtl. nicht mehr erreichbar.
+    if (targetMember) {
+      const dmEmbed = new EmbedBuilder()
+        .setTitle(`👢 Kick auf ${interaction.guild.name}`)
+        .setColor(0xe67e22)
+        .addFields(
+          { name: '📝 Grund', value: reason, inline: false },
+        )
+        .setFooter({ text: '🐾 Oreo' })
+        .setTimestamp();
+      await target.send({ embeds: [dmEmbed] }).catch(() => null);
+    }
+
     try {
-      await interaction.guild.members.kick(target.id, {
-        reason: `${moderator.user.tag}: ${reason}`,
-      });
+      await interaction.guild.members.kick(target.id, `${moderator.user.tag}: ${reason}`);
     } catch (e) {
       console.error(e);
       return interaction.reply({

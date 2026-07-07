@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
 const config = require('../config');
 const { buildModLogEmbed } = require('../modlog');
@@ -80,6 +80,20 @@ module.exports = {
 
     const deleteMessageSeconds = deleteMessagesInput ? parseInt(deleteMessagesInput, 10) : 0;
 
+    // DM an Target (Best-Effort) — muss VOR dem Ban passieren, danach ist der User evtl. nicht mehr erreichbar.
+    if (targetMember) {
+      const dmEmbed = new EmbedBuilder()
+        .setTitle(`🔨 Bann auf ${interaction.guild.name}`)
+        .setColor(0xe74c3c)
+        .addFields(
+          { name: '📝 Grund', value: reason, inline: false },
+          ...(durationMs ? [{ name: '⏱️ Dauer', value: durationInput, inline: true }] : []),
+        )
+        .setFooter({ text: '🐾 Oreo' })
+        .setTimestamp();
+      await target.send({ embeds: [dmEmbed] }).catch(() => null);
+    }
+
     try {
       await interaction.guild.members.ban(target.id, {
         reason: `${moderator.user.tag}: ${reason}`,
@@ -92,6 +106,10 @@ module.exports = {
         flags: MessageFlags.Ephemeral,
       });
     }
+
+    // Alte aktive Ban-Rows deaktivieren, damit ein späterer permanenter Re-Ban nicht durch eine
+    // abgelaufene Temp-Ban-Row automatisch entbannt wird (background.js entbannt bei JEDER aktiven Zeile).
+    await cases.deactivateActiveInfractions(interaction.guildId, target.id, 'ban').catch(err => console.error('[ban] Deactivating old ban rows failed:', err));
 
     let caseNumber;
     try {
