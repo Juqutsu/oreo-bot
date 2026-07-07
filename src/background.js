@@ -147,7 +147,19 @@ async function runDecayAndExpiry(client) {
     console.error('[background] Error processing expired mutes:', err);
   }
 
-  // 3. Warn Decay (bulk update)
+  // 3. Expire Timeouts (no Discord I/O — Discord lifts timeouts itself)
+  try {
+    const [timeoutResult] = await pool.execute(
+      "UPDATE infractions SET active = 0 WHERE type = 'timeout' AND active = 1 AND expires_at IS NOT NULL AND expires_at < NOW()"
+    );
+    if (timeoutResult.affectedRows > 0) {
+      console.log(`[background] Deactivated ${timeoutResult.affectedRows} expired timeout case(s).`);
+    }
+  } catch (err) {
+    console.error('[background] Error processing expired timeouts:', err);
+  }
+
+  // 4. Warn Decay (bulk update)
   try {
     const [decayResult] = await pool.execute(`
       UPDATE infractions i
@@ -168,10 +180,17 @@ async function runDecayAndExpiry(client) {
 
 function startBackgroundTasks(client) {
   console.log('[background] Starting background checks loop (60s interval)...');
+  let running = false;
   setInterval(async () => {
-    await runDecayAndExpiry(client).catch((err) => {
+    if (running) return;
+    running = true;
+    try {
+      await runDecayAndExpiry(client);
+    } catch (err) {
       console.error('[background] Uncaught error in runDecayAndExpiry interval loop:', err);
-    });
+    } finally {
+      running = false;
+    }
   }, 60000);
 }
 
