@@ -18,6 +18,10 @@ async function createCase({
   source = 'manual',
   active = 1,
 }) {
+  // Defensive truncation — reason column is VARCHAR(512); callers already cap
+  // the slash-command option at 512 chars, but this guards non-command callers too.
+  reason = reason != null ? String(reason).slice(0, 512) : null;
+
   const conn = await getPool().getConnection();
   try {
     await conn.beginTransaction();
@@ -210,7 +214,9 @@ async function editReason({ guildId, originalCaseNumber, moderatorId, newReason 
     const [[row]] = await conn.query('SELECT LAST_INSERT_ID() AS metaCaseNumber');
     const metaCaseNumber = row.metaCaseNumber;
 
-    const diffReason = `Alt: ${oldReason ?? '(leer)'} → Neu: ${newReason ?? '(leer)'}`;
+    let diffReason = `Alt: ${oldReason ?? '(leer)'} → Neu: ${newReason ?? '(leer)'}`;
+    // reason column is VARCHAR(512) — the diff can exceed that (e.g. two long reasons), truncate before INSERT.
+    diffReason = diffReason.length > 512 ? diffReason.slice(0, 509) + '…' : diffReason;
     await conn.execute(
       `INSERT INTO infractions (guild_id, case_number, parent_case_number, user_id, moderator_id, type, source, reason)
        VALUES (?, ?, ?, ?, ?, 'reason_edited', 'manual', ?)`,

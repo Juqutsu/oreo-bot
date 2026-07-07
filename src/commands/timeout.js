@@ -45,7 +45,7 @@ module.exports = {
     }
 
     // Self-timeout guard
-    if (target.id === interaction.user.id) {
+    if (target.id === moderator.id) {
       return interaction.reply({
         content: 'Du kannst dir selbst keinen Timeout geben.',
         flags: MessageFlags.Ephemeral,
@@ -60,7 +60,7 @@ module.exports = {
       });
     }
 
-    const targetMember = interaction.guild.members.cache.get(target.id) ?? null;
+    const targetMember = await interaction.guild.members.fetch(target.id).catch(() => null);
 
     // Not-in-server guard
     if (!targetMember) {
@@ -79,7 +79,7 @@ module.exports = {
     }
 
     // Role hierarchy guard
-    if (targetMember.roles.highest.position >= moderator.roles.highest.position) {
+    if (moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) {
       return interaction.reply({
         content: 'Du kannst Mitglieder mit gleicher oder höherer Rolle nicht timeouten.',
         flags: MessageFlags.Ephemeral,

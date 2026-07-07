@@ -25,6 +25,30 @@ module.exports = {
       });
     }
 
+    // Self-unmute guard
+    if (target.id === moderator.id) {
+      return interaction.reply({
+        content: 'Du kannst dich nicht selbst entmuten.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    // Owner guard
+    if (target.id === interaction.guild.ownerId) {
+      return interaction.reply({
+        content: 'Der Server-Inhaber kann nicht entmutet werden.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    // Role hierarchy guard
+    if (moderator.roles.highest.comparePositionTo(targetMember.roles.highest) <= 0) {
+      return interaction.reply({
+        content: 'Du kannst dieses Mitglied nicht entmuten (Rollen-Hierarchie).',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
     const roleId = await config.getMutedRoleId(interaction.guildId);
     if (!roleId) {
       return interaction.reply({

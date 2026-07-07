@@ -1,18 +1,27 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const cases = require('../cases');
+const perms = require('../perms');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('warnings')
     .setDescription('Zeigt die Verwarnungen eines Users.')
-    .addUserOption((option) => option.setName('target').setDescription('Wessen Verwarnungen?').setRequired(true))
+    .addUserOption((option) => option.setName('target').setDescription('Wessen Verwarnungen? (Standard: du selbst)').setRequired(false))
     .addBooleanOption((option) => option.setName('include_inactive').setDescription('Auch entfernte Verwarnungen zeigen').setRequired(false)),
 
-  requiredTier: 'supporter',
-
   async execute(interaction) {
-    const target = interaction.options.getUser('target');
+    const target = interaction.options.getUser('target') ?? interaction.user;
     const includeInactive = interaction.options.getBoolean('include_inactive') ?? false;
+
+    if (target.id !== interaction.user.id) {
+      const allowed = await perms.hasTier(interaction.guildId, interaction.member, 'supporter').catch(() => false);
+      if (!allowed) {
+        return interaction.reply({
+          content: '❌ Du kannst nur deine eigenen Verwarnungen einsehen.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
 
     let warns;
     let activeCount;
