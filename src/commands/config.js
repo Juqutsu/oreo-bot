@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getPool } = require('../db');
+const { invalidateGuildRowCache } = require('../config');
 const escalations = require('../escalations');
 const { parseDuration, formatDuration, MAX_TIMEOUT_MS } = require('../duration');
 
@@ -602,6 +603,7 @@ async function handleChannelSet(interaction) {
       `UPDATE guilds SET ${column} = ? WHERE guild_id = ?`,
       [channel.id, interaction.guildId],
     );
+    invalidateGuildRowCache(interaction.guildId);
   } catch (err) {
     console.error('/config channel set DB error:', err);
     return interaction.reply({
@@ -654,6 +656,7 @@ async function handleChannelUnset(interaction) {
       `UPDATE guilds SET ${column} = NULL WHERE guild_id = ?`,
       [interaction.guildId],
     );
+    invalidateGuildRowCache(interaction.guildId);
   } catch (err) {
     console.error('/config channel unset DB error:', err);
     return interaction.reply({
@@ -730,6 +733,7 @@ async function handleFeatureSet(interaction) {
       `UPDATE guilds SET ${column} = ? WHERE guild_id = ?`,
       [value ? 1 : 0, interaction.guildId],
     );
+    invalidateGuildRowCache(interaction.guildId);
   } catch (err) {
     console.error('/config feature set DB error:', err);
     return interaction.reply({
@@ -879,6 +883,7 @@ async function handleSecuritySetAge(interaction) {
       'UPDATE guilds SET min_account_age_days = ? WHERE guild_id = ?',
       [days, interaction.guildId]
     );
+    invalidateGuildRowCache(interaction.guildId);
   } catch (err) {
     console.error('/config security set-age DB error:', err);
     return interaction.reply({
@@ -902,6 +907,7 @@ async function handleSecuritySetWarnDecay(interaction) {
       'UPDATE guilds SET warn_decay_days = ? WHERE guild_id = ?',
       [days, interaction.guildId]
     );
+    invalidateGuildRowCache(interaction.guildId);
   } catch (err) {
     console.error('/config security set-warn-decay DB error:', err);
     return interaction.reply({
@@ -1544,6 +1550,7 @@ async function handleWelcomeUnsetJoinRole(interaction) {
       'UPDATE guilds SET join_role_id = NULL, join_role_ids = NULL WHERE guild_id = ?',
       [interaction.guildId]
     );
+    invalidateGuildRowCache(interaction.guildId);
   } catch (err) {
     console.error('/config welcome unset-join-role DB error:', err);
     return interaction.reply({
@@ -1924,6 +1931,7 @@ async function handleLevelPermsSet(interaction) {
       'UPDATE guilds SET level_supporter_required = ?, candidacy_role_id = ? WHERE guild_id = ?',
       [level, role ? role.id : null, guildId]
     );
+    invalidateGuildRowCache(guildId);
 
     const embed = new EmbedBuilder()
       .setColor('#2ECC71')
@@ -1952,6 +1960,7 @@ async function handleLevelPermsUnset(interaction) {
       'UPDATE guilds SET level_supporter_required = NULL, candidacy_role_id = NULL WHERE guild_id = ?',
       [guildId]
     );
+    invalidateGuildRowCache(guildId);
 
     const embed = new EmbedBuilder()
       .setColor('#E74C3C')
@@ -2200,6 +2209,7 @@ async function handleSecurityUnsetVerifiedRoles(interaction) {
       'UPDATE guilds SET verified_role_id = NULL, verified_role_ids = NULL WHERE guild_id = ?',
       [interaction.guildId]
     );
+    invalidateGuildRowCache(interaction.guildId);
   } catch (err) {
     console.error('/config security unset-verified-roles DB error:', err);
     return interaction.reply({
@@ -2222,6 +2232,7 @@ async function handleSecurityUnsetUnverifiedRoles(interaction) {
       'UPDATE guilds SET unverified_role_ids = NULL WHERE guild_id = ?',
       [interaction.guildId]
     );
+    invalidateGuildRowCache(interaction.guildId);
   } catch (err) {
     console.error('/config security unset-unverified-roles DB error:', err);
     return interaction.reply({

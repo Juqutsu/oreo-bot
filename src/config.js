@@ -853,6 +853,7 @@ async function setVoiceRecMessage(guildId, message) {
 }
 
 module.exports = {
+  invalidateGuildRowCache,
   getModLogChannelId,
   getReportChannelId,
   getMsgLogChannelId,
