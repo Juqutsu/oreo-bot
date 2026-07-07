@@ -263,6 +263,25 @@ async function deactivateActiveInfractions(guildId, userId, type) {
   );
 }
 
+/**
+ * Prüft ob ein User aktuell eine aktive Infraction eines bestimmten Typs hat
+ * (z.B. 'mute'), berücksichtigt dabei ein evtl. gesetztes Ablaufdatum.
+ * @param {string} guildId
+ * @param {string} userId
+ * @param {string} type
+ * @returns {Promise<boolean>}
+ */
+async function hasActiveInfraction(guildId, userId, type) {
+  const [rows] = await getPool().execute(
+    `SELECT 1 FROM infractions
+       WHERE guild_id = ? AND user_id = ? AND type = ? AND active = 1
+         AND (expires_at IS NULL OR expires_at > NOW())
+       LIMIT 1`,
+    [guildId, userId, type],
+  );
+  return rows.length > 0;
+}
+
 module.exports = {
   createCase,
   getCaseByNumber,
@@ -271,6 +290,7 @@ module.exports = {
   countActiveWarnings,
   deactivate,
   deactivateActiveInfractions,
+  hasActiveInfraction,
   removeWarn,
   editReason,
 };

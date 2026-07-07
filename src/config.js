@@ -1,16 +1,52 @@
 const { getPool } = require('./db');
+const { normalize } = require('./obfuscation');
+
+// TTL-Cache für die Guild-Config-Row (`guilds`-Tabelle). Vermeidet die 15+ identischen
+// SELECTs pro Join / 3 pro Nachricht, die entstehen weil jeder Getter readGuildRow aufruft.
+const ROW_CACHE_TTL_MS = 30_000;
+// guildId -> { row, fetchedAt }
+const rowCache = new Map();
+
+// TTL-Cache für Bad Words (+ vor-normalisierte Varianten) pro Guild.
+const BAD_WORDS_CACHE_TTL_MS = 30_000;
+// guildId -> { words, normalized, fetchedAt }
+const badWordsCache = new Map();
 
 /**
- * Liest die Config-Row einer Guild aus `guilds`.
+ * Invalidiert die gecachte Guild-Row. Wird von JEDEM Setter direkt nach seinem
+ * UPDATE aufgerufen, damit der nächste Read wieder frische Daten aus der DB liest.
+ * @param {string} guildId
+ */
+function invalidateGuildRowCache(guildId) {
+  rowCache.delete(guildId);
+}
+
+/**
+ * Invalidiert den gecachten Bad-Words-Eintrag einer Guild.
+ * @param {string} guildId
+ */
+function invalidateBadWordsCache(guildId) {
+  badWordsCache.delete(guildId);
+}
+
+/**
+ * Liest die Config-Row einer Guild aus `guilds`. Gecacht für ROW_CACHE_TTL_MS.
  * @param {string} guildId
  * @returns {Promise<{mod_log_channel_id: string|null, report_channel_id: string|null, automod_enabled: number}|null>}
  */
 async function readGuildRow(guildId) {
+  const cached = rowCache.get(guildId);
+  if (cached && Date.now() - cached.fetchedAt < ROW_CACHE_TTL_MS) {
+    return cached.row;
+  }
+
   const [rows] = await getPool().execute(
     'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, join_role_id, join_role_ids, verified_role_ids, unverified_role_ids, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message, welcome_banner_enabled, leave_banner_enabled, welcome_banner_text, leave_banner_text FROM guilds WHERE guild_id = ?',
     [guildId],
   );
-  return rows[0] ?? null;
+  const row = rows[0] ?? null;
+  rowCache.set(guildId, { row, fetchedAt: Date.now() });
+  return row;
 }
 
 /**
@@ -97,6 +133,7 @@ async function setMutedRoleId(guildId, roleId) {
     'UPDATE guilds SET muted_role_id = ? WHERE guild_id = ?',
     [roleId, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -115,6 +152,7 @@ async function setCaptchaEnabled(guildId, enabled) {
     'UPDATE guilds SET captcha_enabled = ? WHERE guild_id = ?',
     [enabled ? 1 : 0, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -133,6 +171,7 @@ async function setVerifiedRoleId(guildId, roleId) {
     'UPDATE guilds SET verified_role_id = ? WHERE guild_id = ?',
     [roleId || null, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 // Helper for parsing comma-separated list
@@ -163,6 +202,7 @@ async function addJoinRoleId(guildId, roleId) {
     'UPDATE guilds SET join_role_ids = ? WHERE guild_id = ?',
     [current.join(','), guildId]
   );
+  invalidateGuildRowCache(guildId);
   return true;
 }
 
@@ -177,6 +217,7 @@ async function removeJoinRoleId(guildId, roleId) {
     'UPDATE guilds SET join_role_ids = ? WHERE guild_id = ?',
     [next.length > 0 ? next.join(',') : null, guildId]
   );
+  invalidateGuildRowCache(guildId);
   return true;
 }
 
@@ -202,6 +243,7 @@ async function addVerifiedRoleId(guildId, roleId) {
     'UPDATE guilds SET verified_role_ids = ? WHERE guild_id = ?',
     [current.join(','), guildId]
   );
+  invalidateGuildRowCache(guildId);
   return true;
 }
 
@@ -216,6 +258,7 @@ async function removeVerifiedRoleId(guildId, roleId) {
     'UPDATE guilds SET verified_role_ids = ? WHERE guild_id = ?',
     [next.length > 0 ? next.join(',') : null, guildId]
   );
+  invalidateGuildRowCache(guildId);
   return true;
 }
 
@@ -238,6 +281,7 @@ async function addUnverifiedRoleId(guildId, roleId) {
     'UPDATE guilds SET unverified_role_ids = ? WHERE guild_id = ?',
     [current.join(','), guildId]
   );
+  invalidateGuildRowCache(guildId);
   return true;
 }
 
@@ -252,6 +296,7 @@ async function removeUnverifiedRoleId(guildId, roleId) {
     'UPDATE guilds SET unverified_role_ids = ? WHERE guild_id = ?',
     [next.length > 0 ? next.join(',') : null, guildId]
   );
+  invalidateGuildRowCache(guildId);
   return true;
 }
 
@@ -271,6 +316,7 @@ async function setJoinRoleId(guildId, roleId) {
     'UPDATE guilds SET join_role_id = ? WHERE guild_id = ?',
     [roleId || null, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -289,6 +335,7 @@ async function setToxicityEnabled(guildId, enabled) {
     'UPDATE guilds SET toxicity_enabled = ? WHERE guild_id = ?',
     [enabled ? 1 : 0, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -307,17 +354,41 @@ async function setToxicityAction(guildId, action) {
     'UPDATE guilds SET toxicity_action = ? WHERE guild_id = ?',
     [action, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
- * Liefert die Liste aller Bad Words einer Guild.
+ * Liefert die Liste aller Bad Words einer Guild. Gecacht für BAD_WORDS_CACHE_TTL_MS.
  */
 async function getBadWords(guildId) {
+  const cached = badWordsCache.get(guildId);
+  if (cached && Date.now() - cached.fetchedAt < BAD_WORDS_CACHE_TTL_MS) {
+    return cached.words;
+  }
+
   const [rows] = await getPool().execute(
     'SELECT word FROM bad_words WHERE guild_id = ? ORDER BY word ASC',
     [guildId]
   );
-  return rows.map((r) => r.word);
+  const words = rows.map((r) => r.word);
+  const normalized = words.map((word) => ({ word, normalized: normalize(word) }));
+  badWordsCache.set(guildId, { words, normalized, fetchedAt: Date.now() });
+  return words;
+}
+
+/**
+ * Liefert die Bad Words einer Guild vor-normalisiert (einmal pro Cache-Füllung berechnet),
+ * damit der Toxizitätsfilter nicht bei jeder Nachricht jedes Wort erneut normalisieren muss.
+ * @param {string} guildId
+ * @returns {Promise<{word: string, normalized: string}[]>}
+ */
+async function getNormalizedBadWords(guildId) {
+  const cached = badWordsCache.get(guildId);
+  if (cached && Date.now() - cached.fetchedAt < BAD_WORDS_CACHE_TTL_MS) {
+    return cached.normalized;
+  }
+  await getBadWords(guildId); // füllt den Cache (inkl. normalized) über den gemeinsamen Code-Pfad
+  return badWordsCache.get(guildId)?.normalized ?? [];
 }
 
 /**
@@ -330,6 +401,7 @@ async function addBadWord(guildId, word) {
     'INSERT IGNORE INTO bad_words (guild_id, word) VALUES (?, ?)',
     [guildId, cleanWord]
   );
+  invalidateBadWordsCache(guildId);
 }
 
 /**
@@ -341,6 +413,7 @@ async function removeBadWord(guildId, word) {
     'DELETE FROM bad_words WHERE guild_id = ? AND word = ?',
     [guildId, cleanWord]
   );
+  invalidateBadWordsCache(guildId);
 }
 
 /**
@@ -359,6 +432,7 @@ async function setCaptchaChannelId(guildId, channelId) {
     'UPDATE guilds SET captcha_channel_id = ? WHERE guild_id = ?',
     [channelId || null, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -433,6 +507,7 @@ async function setWelcomeChannelId(guildId, channelId) {
     'UPDATE guilds SET welcome_channel_id = ? WHERE guild_id = ?',
     [channelId || null, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -451,6 +526,7 @@ async function setLeaveChannelId(guildId, channelId) {
     'UPDATE guilds SET leave_channel_id = ? WHERE guild_id = ?',
     [channelId || null, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -469,6 +545,7 @@ async function setWelcomeEnabled(guildId, enabled) {
     'UPDATE guilds SET welcome_enabled = ? WHERE guild_id = ?',
     [enabled ? 1 : 0, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -487,6 +564,7 @@ async function setLeaveEnabled(guildId, enabled) {
     'UPDATE guilds SET leave_enabled = ? WHERE guild_id = ?',
     [enabled ? 1 : 0, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -505,6 +583,7 @@ async function setWelcomeMessage(guildId, message) {
     'UPDATE guilds SET welcome_message = ? WHERE guild_id = ?',
     [message || 'Willkommen {user} auf {server}!', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -523,6 +602,7 @@ async function setLeaveMessage(guildId, message) {
     'UPDATE guilds SET leave_message = ? WHERE guild_id = ?',
     [message || '{user} hat den Server verlassen.', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -541,6 +621,7 @@ async function setWelcomeBgUrl(guildId, url) {
     'UPDATE guilds SET welcome_bg_url = ? WHERE guild_id = ?',
     [url || null, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -559,6 +640,7 @@ async function setLeaveBgUrl(guildId, url) {
     'UPDATE guilds SET leave_bg_url = ? WHERE guild_id = ?',
     [url || null, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -577,6 +659,7 @@ async function setWelcomeAccentColor(guildId, color) {
     'UPDATE guilds SET welcome_accent_color = ? WHERE guild_id = ?',
     [color || '#5865f2', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -595,6 +678,7 @@ async function setWelcomeTextColor(guildId, color) {
     'UPDATE guilds SET welcome_text_color = ? WHERE guild_id = ?',
     [color || '#7289da', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -613,6 +697,7 @@ async function setLeaveAccentColor(guildId, color) {
     'UPDATE guilds SET leave_accent_color = ? WHERE guild_id = ?',
     [color || '#e74c3c', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -631,6 +716,7 @@ async function setLeaveTextColor(guildId, color) {
     'UPDATE guilds SET leave_text_color = ? WHERE guild_id = ?',
     [color || '#e74c3c', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -649,6 +735,7 @@ async function setWelcomeBannerEnabled(guildId, enabled) {
     'UPDATE guilds SET welcome_banner_enabled = ? WHERE guild_id = ?',
     [enabled ? 1 : 0, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -667,6 +754,7 @@ async function setLeaveBannerEnabled(guildId, enabled) {
     'UPDATE guilds SET leave_banner_enabled = ? WHERE guild_id = ?',
     [enabled ? 1 : 0, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -685,6 +773,7 @@ async function setWelcomeBannerText(guildId, text) {
     'UPDATE guilds SET welcome_banner_text = ? WHERE guild_id = ?',
     [text || 'WILLKOMMEN', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -703,6 +792,7 @@ async function setLeaveBannerText(guildId, text) {
     'UPDATE guilds SET leave_banner_text = ? WHERE guild_id = ?',
     [text || 'AUF WIEDERSEHEN', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -721,6 +811,7 @@ async function setVoiceRecEnabled(guildId, enabled) {
     'UPDATE guilds SET voice_rec_enabled = ? WHERE guild_id = ?',
     [enabled ? 1 : 0, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -739,6 +830,7 @@ async function setVoiceRecChannelId(guildId, channelId) {
     'UPDATE guilds SET voice_rec_channel_id = ? WHERE guild_id = ?',
     [channelId || null, guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 /**
@@ -757,6 +849,7 @@ async function setVoiceRecMessage(guildId, message) {
     'UPDATE guilds SET voice_rec_message = ? WHERE guild_id = ?',
     [message || 'Wer hat Oreo Ban gerufen? Ab ins Gefängnis!', guildId]
   );
+  invalidateGuildRowCache(guildId);
 }
 
 module.exports = {
@@ -778,6 +871,7 @@ module.exports = {
   getToxicityAction,
   setToxicityAction,
   getBadWords,
+  getNormalizedBadWords,
   addBadWord,
   removeBadWord,
   getCaptchaChannelId,
@@ -838,4 +932,3 @@ module.exports = {
   addUnverifiedRoleId,
   removeUnverifiedRoleId,
 };
-

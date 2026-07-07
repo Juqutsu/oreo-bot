@@ -1,5 +1,7 @@
 const { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const config = require('../config');
+const cases = require('../cases');
+const { getMutedRole } = require('../composables/mutedRole');
 const { formatDuration } = require('../duration');
 
 // Anti-Raid State
@@ -227,6 +229,27 @@ async function execute(member) {
     console.error('[captcha-verification] failed to initiate verification channel:', err);
   }
 
+  // Mute-Rejoin-Enforcement: aktive Mute-Rolle nach erneutem Beitritt wiederherstellen
+  try {
+    const hasActiveMute = await cases.hasActiveInfraction(guildId, member.id, 'mute');
+    if (hasActiveMute) {
+      const mutedRole = await getMutedRole(member.guild);
+      if (mutedRole) {
+        await member.roles.add(mutedRole, 'Oreo: Aktiver Mute — Rolle nach Rejoin wieder angewendet').catch(() => null);
+
+        const logChannelId = await config.getModLogChannelId(guildId);
+        if (logChannelId) {
+          const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
+          if (logChannel) {
+            await logChannel.send(`🔇 <@${member.id}> ist mit aktivem Mute erneut beigetreten — Muted-Rolle wieder angewendet.`).catch(() => null);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[mute-rejoin] failed to re-apply muted role on rejoin:', err);
+  }
+
   // Server-Log: Join
   try {
     const isJoinLeaveEnabled = await config.isLogJoinLeaveEnabled(guildId);
@@ -299,14 +322,24 @@ async function execute(member) {
           const bgUrl = await config.getWelcomeBgUrl(guildId);
           const bannerEnabled = await config.isWelcomeBannerEnabled(guildId);
 
+          // Single member fetch shared by the message text and the card image
+          // (previously each fetched the full member list separately).
+          let memberCount = member.guild.memberCount;
+          try {
+            const members = await member.guild.members.fetch();
+            memberCount = members.filter((m) => !m.user.bot).size;
+          } catch (err) {
+            console.warn('[welcome-system] failed to fetch guild members, falling back to total memberCount:', err.message);
+          }
+
           const { formatWelcomeMessage } = require('../welcomeCard');
-          const messageText = await formatWelcomeMessage(welcomeMessageTemplate, member);
+          const messageText = await formatWelcomeMessage(welcomeMessageTemplate, member, memberCount);
 
           const sendPayload = { content: messageText };
 
           if (bannerEnabled) {
             const { generateCard } = require('../welcomeCard');
-            const cardBuffer = await generateCard(member.user, member.guild, 'welcome', bgUrl);
+            const cardBuffer = await generateCard(member.user, member.guild, 'welcome', bgUrl, memberCount);
             const { AttachmentBuilder } = require('discord.js');
             const attachment = new AttachmentBuilder(cardBuffer, { name: 'welcome.png' });
             sendPayload.files = [attachment];

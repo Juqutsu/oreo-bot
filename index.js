@@ -79,9 +79,9 @@ client.once(Events.ClientReady, async (c) => {
   
   try {
     const invitesTracker = require('./src/invites');
-    for (const guild of c.guilds.cache.values()) {
-      await invitesTracker.cacheGuildInvites(guild);
-    }
+    await Promise.allSettled(
+      [...c.guilds.cache.values()].map((g) => invitesTracker.cacheGuildInvites(g))
+    );
     console.log(`[startup] Cached invites for ${c.guilds.cache.size} guild(s)`);
   } catch (err) {
     console.error('Failed to cache invites on startup:', err);

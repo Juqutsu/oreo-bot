@@ -32,9 +32,11 @@ function hexToRgba(hex, alpha) {
  * @param {import('discord.js').Guild} guild The Discord guild object
  * @param {'welcome' | 'leave'} type The event type
  * @param {string|null} customBgUrl Optional custom background image URL
+ * @param {number|null} memberCount Optional precomputed human member count — when omitted,
+ *   falls back to a fresh `guild.members.fetch()` (with `guild.memberCount` as last resort).
  * @returns {Promise<Buffer>} The PNG file buffer
  */
-async function generateCard(user, guild, type, customBgUrl = null) {
+async function generateCard(user, guild, type, customBgUrl = null, memberCount = null) {
   const canvas = createCanvas(800, 400);
   const ctx = canvas.getContext('2d');
 
@@ -212,12 +214,15 @@ async function generateCard(user, guild, type, customBgUrl = null) {
   } catch (err) {
     console.warn('[welcome-card] Failed to load custom banner text:', err.message);
   }
-  let humanMemberCount = guild.memberCount;
-  try {
-    const members = await guild.members.fetch();
-    humanMemberCount = members.filter(m => !m.user.bot).size;
-  } catch (err) {
-    console.warn('[welcome-card] Failed to fetch guild members, falling back to total memberCount:', err.message);
+  let humanMemberCount = memberCount;
+  if (humanMemberCount == null) {
+    humanMemberCount = guild.memberCount;
+    try {
+      const members = await guild.members.fetch();
+      humanMemberCount = members.filter(m => !m.user.bot).size;
+    } catch (err) {
+      console.warn('[welcome-card] Failed to fetch guild members, falling back to total memberCount:', err.message);
+    }
   }
   const bannerText = bannerTextTemplate
     .replace(/{username}/g, user.username)
@@ -267,15 +272,20 @@ async function generateCard(user, guild, type, customBgUrl = null) {
  * 
  * @param {string} template The message template string
  * @param {import('discord.js').GuildMember} member The member object
+ * @param {number|null} memberCount Optional precomputed human member count — when omitted,
+ *   falls back to a fresh `guild.members.fetch()` (with `guild.memberCount` as last resort).
  * @returns {string} The formatted message
  */
-async function formatWelcomeMessage(template, member) {
-  let humanMemberCount = member.guild.memberCount;
-  try {
-    const members = await member.guild.members.fetch();
-    humanMemberCount = members.filter(m => !m.user.bot).size;
-  } catch (err) {
-    console.warn('[welcome-card] Failed to fetch guild members for message formatting:', err.message);
+async function formatWelcomeMessage(template, member, memberCount = null) {
+  let humanMemberCount = memberCount;
+  if (humanMemberCount == null) {
+    humanMemberCount = member.guild.memberCount;
+    try {
+      const members = await member.guild.members.fetch();
+      humanMemberCount = members.filter(m => !m.user.bot).size;
+    } catch (err) {
+      console.warn('[welcome-card] Failed to fetch guild members for message formatting:', err.message);
+    }
   }
   return template
     .replace(/{user}/g, `<@${member.id}>`)

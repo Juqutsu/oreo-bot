@@ -1,6 +1,25 @@
 const config = require('../config');
 
 /**
+ * Löst die Muted-Rolle rein lesend auf (konfigurierte ID oder Namens-Fallback "Muted"),
+ * OHNE sie bei Fehlen neu anzulegen. Für Kontexte wie Join-Events gedacht, in denen das
+ * Anlegen einer neuen Rolle (inkl. Channel-Overwrites) ein unerwünschter Seiteneffekt wäre.
+ * @param {import('discord.js').Guild} guild
+ * @returns {Promise<import('discord.js').Role|null>}
+ */
+async function getMutedRole(guild) {
+  const guildId = guild.id;
+  const roleId = await config.getMutedRoleId(guildId);
+
+  if (roleId) {
+    const role = guild.roles.cache.get(roleId) || await guild.roles.fetch(roleId).catch(() => null);
+    if (role) return role;
+  }
+
+  return guild.roles.cache.find((r) => r.name === 'Muted') || null;
+}
+
+/**
  * Holt die Muted-Rolle oder erstellt sie, falls sie nicht existiert,
  * und konfiguriert die entsprechenden Berechtigungen in allen Channels.
  * @param {import('discord.js').Guild} guild
@@ -52,4 +71,4 @@ async function getOrCreateMutedRole(guild) {
   return role;
 }
 
-module.exports = { getOrCreateMutedRole };
+module.exports = { getOrCreateMutedRole, getMutedRole };

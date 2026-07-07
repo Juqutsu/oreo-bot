@@ -187,15 +187,14 @@ async function execute(message) {
     const enabled = await config.getToxicityEnabled(guildId);
     if (!enabled) return;
 
-    const badWords = await config.getBadWords(guildId);
-    if (badWords.length === 0) return;
+    const normalizedBadWords = await config.getNormalizedBadWords(guildId);
+    if (normalizedBadWords.length === 0) return;
 
     const normalizedContent = obfuscation.normalize(message.content);
     let matchedWord = null;
 
-    for (const word of badWords) {
-      const normalizedWord = obfuscation.normalize(word);
-      if (normalizedWord && normalizedContent.includes(normalizedWord)) {
+    for (const { word, normalized } of normalizedBadWords) {
+      if (normalized && normalizedContent.includes(normalized)) {
         matchedWord = word;
         break;
       }
