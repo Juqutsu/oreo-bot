@@ -331,6 +331,28 @@ CREATE TABLE IF NOT EXISTS market_listings (
 );
 
 -- ============================================================
+-- Stage 23 Migration: Announcements Lifecycle
+-- ============================================================
+-- Announcements-Verwaltung (Lifecycle: Vorschau → posten → bearbeiten/löschen)
+CREATE TABLE IF NOT EXISTS announcements (
+  id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  guild_id     BIGINT UNSIGNED NOT NULL,
+  channel_id   BIGINT UNSIGNED NOT NULL,
+  message_id   BIGINT UNSIGNED NOT NULL,
+  author_id    BIGINT UNSIGNED NOT NULL,
+  title        VARCHAR(256) NOT NULL,
+  description  TEXT NOT NULL,
+  color        INT UNSIGNED NULL,
+  image_url    VARCHAR(512) NULL,
+  ping_role_id BIGINT UNSIGNED NULL,
+  status       ENUM('posted','deleted') NOT NULL DEFAULT 'posted',
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  edited_at    DATETIME NULL,
+  edited_by    BIGINT UNSIGNED NULL,
+  INDEX idx_guild_status (guild_id, status, id)
+);
+
+-- ============================================================
 -- Stage 21 Migration: Join Role
 -- ============================================================
 ALTER TABLE guilds ADD COLUMN join_role_id BIGINT UNSIGNED NULL;
