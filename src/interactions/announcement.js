@@ -46,6 +46,11 @@ function colorKeyFromValue(colorValue) {
   return entry ? entry[0] : 'blurple';
 }
 
+// Truncates an old/new diff value for the edit mod-log embed (300 chars per plan spec).
+function truncateForDiff(str) {
+  return str.length > 300 ? str.slice(0, 300) + '…' : str;
+}
+
 // Display-only ping formatting for the ephemeral preview line (NOT used for the
 // actual post — handlePostCreate re-resolves + re-validates the role itself).
 function formatPingText(pingRoleId, guildId) {
@@ -312,9 +317,7 @@ async function handlePreviewButton(interaction, parts) {
     session.posting = true;
 
     if (session.mode === 'edit') {
-      // Applying an edit to the already-posted message/DB row lands in Task 4.
-      session.posting = false;
-      await interaction.reply({ content: '⏳ Edit-Anwendung folgt in Task 4.', flags: MessageFlags.Ephemeral });
+      await handlePostEdit(interaction, nonce, session);
       return;
     }
     await handlePostCreate(interaction, nonce, session);
@@ -459,6 +462,146 @@ async function handlePostCreate(interaction, nonce, session) {
     }
   } catch (err) {
     console.warn('[announcement] modlog post failed:', err);
+  }
+}
+
+// ---------- Post handler (mode: edit) ----------
+//
+// Applies the session's edited title/description/imageUrl to the already-posted
+// original message + DB row. Mirrors handlePostCreate's structure: every failure
+// path resets session.posting = false before its reply/update (session.posting was
+// synchronously claimed in handlePreviewButton, before this function is reached),
+// retryable failures use interaction.reply() (leaves the preview + its buttons
+// intact so the mod can click "✅ Übernehmen" again), terminal failures (row gone /
+// original message gone) use interaction.update() to replace the preview outright.
+async function handlePostEdit(interaction, nonce, session) {
+  // 1. Row erneut laden (race-protection: wurde es zwischenzeitlich gelöscht?)
+  let row;
+  try {
+    row = await announcements.getAnnouncement(interaction.guildId, session.announcementId);
+  } catch (err) {
+    console.error('[announcement] failed to reload announcement for edit-apply:', err);
+    session.posting = false;
+    await interaction.reply({ content: '❌ Datenbankfehler beim Laden des Announcements.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (!row || row.status === 'deleted') {
+    session.posting = false;
+    await interaction.update({
+      content: '❌ Dieses Announcement existiert nicht mehr in der Verwaltung.',
+      embeds: [],
+      components: [],
+    });
+    return;
+  }
+
+  // 2. Channel + Original-Nachricht fetchen (beide können zwischenzeitlich weg sein)
+  const channel = await interaction.guild.channels.fetch(row.channel_id).catch(() => null);
+  const message = channel ? await channel.messages.fetch(row.message_id).catch(() => null) : null;
+
+  if (!message) {
+    session.posting = false;
+    await interaction.update({
+      content: '❌ Die Original-Nachricht existiert nicht mehr (manuell gelöscht?).',
+      embeds: [],
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`announcement:delconfirm:yes:${row.id}`)
+            .setLabel('Eintrag als gelöscht markieren')
+            .setStyle(ButtonStyle.Danger),
+        ),
+      ],
+    });
+    return;
+  }
+
+  // 3. Original-Nachricht editieren — NUR embeds, kein content (Ping-Zeile bleibt unverändert)
+  const color = row.color ?? COLORS.blurple;
+  const embed = buildAnnouncementEmbed({
+    title: session.title,
+    description: session.description,
+    color,
+    imageUrl: session.imageUrl,
+    createdAt: new Date(row.created_at),
+    edited: true,
+  });
+
+  try {
+    await message.edit({ embeds: [embed] });
+  } catch (err) {
+    console.warn('/announcement edit-apply failed:', err);
+    session.posting = false;
+    await interaction.reply({
+      content: `❌ Bearbeiten fehlgeschlagen: ${err.code ?? err.message ?? 'unbekannter Fehler'}`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // 4. In der Verwaltung aktualisieren (fail-soft — die Nachricht wurde bereits editiert)
+  let dbWarning = '';
+  try {
+    await announcements.updateAnnouncement(interaction.guildId, row.id, {
+      title: session.title,
+      description: session.description,
+      imageUrl: session.imageUrl,
+      editedBy: interaction.user.id,
+    });
+  } catch (err) {
+    console.error('[announcement] failed to persist edit:', err);
+    dbWarning = '\n⚠️ Nachricht editiert, aber die Verwaltung konnte nicht aktualisiert werden (Datenbankfehler).';
+  }
+
+  const messageUrl = `https://discord.com/channels/${interaction.guildId}/${channel.id}/${message.id}`;
+
+  previewSessions.delete(nonce);
+
+  await interaction.update({
+    content: `✅ Announcement bearbeitet: ${messageUrl}${dbWarning}`,
+    embeds: [],
+    components: [],
+  });
+
+  // 5. Mod-Log-Embed mit Alt→Neu-Diff (fail-soft)
+  try {
+    const modLogChannelId = await config.getModLogChannelId(interaction.guildId);
+    if (modLogChannelId) {
+      const modLogChannel = await interaction.client.channels.fetch(modLogChannelId);
+      if (modLogChannel) {
+        const fields = [
+          { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
+          { name: '📺 Channel', value: `<#${channel.id}>`, inline: true },
+          { name: '🔗 Link', value: `[Zum Announcement](${messageUrl})`, inline: false },
+        ];
+
+        if (row.title !== session.title) {
+          fields.push({
+            name: 'Titel',
+            value: `**Alt:** ${truncateForDiff(row.title)}\n**Neu:** ${truncateForDiff(session.title)}`,
+            inline: false,
+          });
+        }
+        if (row.description !== session.description) {
+          fields.push({
+            name: 'Beschreibung',
+            value: `**Alt:** ${truncateForDiff(row.description)}\n**Neu:** ${truncateForDiff(session.description)}`,
+            inline: false,
+          });
+        }
+
+        const logEmbed = new EmbedBuilder()
+          .setTitle('✏️ Announcement bearbeitet')
+          .setColor(0x5865f2)
+          .addFields(fields)
+          .setFooter({ text: '🐾 Oreo' })
+          .setTimestamp();
+
+        await modLogChannel.send({ embeds: [logEmbed] });
+      }
+    }
+  } catch (err) {
+    console.warn('[announcement] edit modlog post failed:', err);
   }
 }
 
