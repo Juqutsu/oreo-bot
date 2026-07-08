@@ -298,8 +298,22 @@ async function handlePreviewButton(interaction, parts) {
   }
 
   if (action === 'post') {
+    // Synchronous claim BEFORE any await — closes the double-click race where two
+    // near-simultaneous clicks on the same "✅ Posten" button both pass the checks
+    // above (session lookup + userId gate) and both reach handlePostCreate, causing
+    // a double channel post + double DB row. Whichever click's synchronous JS runs
+    // first wins the claim; the other click gets a friendly "already posting" notice
+    // instead of racing through handlePostCreate. Kept here (not inside
+    // handlePostCreate) so Task 4's edit-mode posting can reuse the same guard.
+    if (session.posting) {
+      await interaction.reply({ content: '⏳ Wird bereits gepostet …', flags: MessageFlags.Ephemeral }).catch(() => null);
+      return;
+    }
+    session.posting = true;
+
     if (session.mode === 'edit') {
       // Applying an edit to the already-posted message/DB row lands in Task 4.
+      session.posting = false;
       await interaction.reply({ content: '⏳ Edit-Anwendung folgt in Task 4.', flags: MessageFlags.Ephemeral });
       return;
     }
@@ -308,6 +322,7 @@ async function handlePreviewButton(interaction, parts) {
   }
 
   console.warn(`[announcement] unhandled preview action=${action}`);
+  await interaction.reply({ content: '❌ Unbekannte Announcement-Interaktion.', flags: MessageFlags.Ephemeral }).catch(() => null);
 }
 
 // ---------- Post handler (mode: create) ----------
@@ -321,6 +336,7 @@ async function handlePostCreate(interaction, nonce, session) {
   // 1. Target-Channel re-fetchen (race-protection)
   const targetChannel = await interaction.guild.channels.fetch(session.targetChannelId).catch(() => null);
   if (!targetChannel?.isTextBased() || targetChannel.isDMBased()) {
+    session.posting = false;
     await interaction.reply({ content: '❌ Target-Channel nicht mehr verfügbar.', flags: MessageFlags.Ephemeral });
     return;
   }
@@ -328,6 +344,7 @@ async function handlePostCreate(interaction, nonce, session) {
   // 2. Bot-Perms re-validieren
   const botPerms = targetChannel.permissionsFor(interaction.guild.members.me);
   if (!botPerms?.has([PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) {
+    session.posting = false;
     await interaction.reply({ content: `❌ Mir fehlen Permissions in <#${targetChannel.id}>.`, flags: MessageFlags.Ephemeral });
     return;
   }
@@ -342,6 +359,7 @@ async function handlePostCreate(interaction, nonce, session) {
       if (pingRole.id === interaction.guild.id) {
         // @everyone role (everyone-role-id === guild-id)
         if (!botPerms.has(PermissionFlagsBits.MentionEveryone)) {
+          session.posting = false;
           await interaction.reply({
             content: `❌ Mir fehlt die Permission \`MentionEveryone\` in <#${targetChannel.id}>.`,
             flags: MessageFlags.Ephemeral,
@@ -375,6 +393,7 @@ async function handlePostCreate(interaction, nonce, session) {
     postedMessage = await targetChannel.send(payload);
   } catch (err) {
     console.warn('/announcement post failed:', err);
+    session.posting = false;
     await interaction.reply({
       content: `❌ Posting fehlgeschlagen: ${err.code ?? err.message ?? 'unbekannter Fehler'}`,
       flags: MessageFlags.Ephemeral,
