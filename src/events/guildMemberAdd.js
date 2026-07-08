@@ -231,23 +231,28 @@ async function execute(member) {
 
   // Mute-Rejoin-Enforcement: aktive Mute-Rolle nach erneutem Beitritt wiederherstellen
   try {
-    const hasActiveMute = await cases.hasActiveInfraction(guildId, member.id, 'mute');
-    if (hasActiveMute) {
-      const mutedRole = await getMutedRole(member.guild);
-      if (mutedRole) {
-        const reapplied = await member.roles.add(mutedRole, 'Oreo: Aktiver Mute — Rolle nach Rejoin wieder angewendet').then(() => true).catch((err) => {
-          console.error('[guildMemberAdd] Re-applying muted role failed:', err);
-          return false;
-        });
+    // Real GuildMembers always have `.id`; only mocks/partials in tests may lack it.
+    // Skip silently in that case instead of passing `undefined` into the DB query.
+    const memberId = member.id ?? member.user?.id;
+    if (memberId) {
+      const hasActiveMute = await cases.hasActiveInfraction(guildId, memberId, 'mute');
+      if (hasActiveMute) {
+        const mutedRole = await getMutedRole(member.guild);
+        if (mutedRole) {
+          const reapplied = await member.roles.add(mutedRole, 'Oreo: Aktiver Mute — Rolle nach Rejoin wieder angewendet').then(() => true).catch((err) => {
+            console.error('[guildMemberAdd] Re-applying muted role failed:', err);
+            return false;
+          });
 
-        const logChannelId = await config.getModLogChannelId(guildId);
-        if (logChannelId) {
-          const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
-          if (logChannel) {
-            if (reapplied) {
-              await logChannel.send(`🔇 <@${member.id}> ist mit aktivem Mute erneut beigetreten — Muted-Rolle wieder angewendet.`).catch(() => null);
-            } else {
-              await logChannel.send(`⚠️ <@${member.id}> ist mit aktivem Mute erneut beigetreten, aber die Muted-Rolle konnte NICHT wieder angewendet werden — prüfe Bot-Berechtigungen/Rollen-Hierarchie.`).catch(() => null);
+          const logChannelId = await config.getModLogChannelId(guildId);
+          if (logChannelId) {
+            const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
+            if (logChannel) {
+              if (reapplied) {
+                await logChannel.send(`🔇 <@${memberId}> ist mit aktivem Mute erneut beigetreten — Muted-Rolle wieder angewendet.`).catch(() => null);
+              } else {
+                await logChannel.send(`⚠️ <@${memberId}> ist mit aktivem Mute erneut beigetreten, aber die Muted-Rolle konnte NICHT wieder angewendet werden — prüfe Bot-Berechtigungen/Rollen-Hierarchie.`).catch(() => null);
+              }
             }
           }
         }

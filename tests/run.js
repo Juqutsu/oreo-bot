@@ -57,10 +57,13 @@ async function run() {
     console.log(`🏃 Running: ${file}`);
     console.log(`--------------------------------------------------`);
     
-    // Pass the process.env containing the loaded .env to child processes
-    const result = spawnSync('node', [filePath], { 
+    // Pass the process.env containing the loaded .env to child processes.
+    // Disable the config row/bad-words cache in tests: fixtures write `guilds` columns via
+    // raw SQL, bypassing the invalidating setters, so a stale cached row would leak into
+    // later reads within the same test process.
+    const result = spawnSync('node', [filePath], {
       stdio: 'inherit',
-      env: process.env 
+      env: { ...process.env, OREO_CONFIG_CACHE_TTL_MS: '0' }
     });
     
     if (result.status !== 0) {

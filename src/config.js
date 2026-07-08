@@ -3,12 +3,14 @@ const { normalize } = require('./obfuscation');
 
 // TTL-Cache für die Guild-Config-Row (`guilds`-Tabelle). Vermeidet die 15+ identischen
 // SELECTs pro Join / 3 pro Nachricht, die entstehen weil jeder Getter readGuildRow aufruft.
-const ROW_CACHE_TTL_MS = 30_000;
+// Über OREO_CONFIG_CACHE_TTL_MS konfigurierbar (z.B. '0' in Tests, um den Cache zu deaktivieren).
+const envTtl = Number.parseInt(process.env.OREO_CONFIG_CACHE_TTL_MS ?? '', 10);
+const ROW_CACHE_TTL_MS = envTtl >= 0 ? envTtl : 30_000;
 // guildId -> { row, fetchedAt }
 const rowCache = new Map();
 
-// TTL-Cache für Bad Words (+ vor-normalisierte Varianten) pro Guild.
-const BAD_WORDS_CACHE_TTL_MS = 30_000;
+// TTL-Cache für Bad Words (+ vor-normalisierte Varianten) pro Guild. Teilt sich dieselbe TTL.
+const BAD_WORDS_CACHE_TTL_MS = ROW_CACHE_TTL_MS;
 // guildId -> { words, normalized, fetchedAt }
 const badWordsCache = new Map();
 

@@ -31,6 +31,9 @@ async function main() {
        captcha_channel_id = NULL`,
     [GUILD_ID, MODLOG_CHANNEL_ID, VERIFIED_ROLE_ID]
   );
+  // Raw SQL bypasses config's setters, so the cached guild row must be invalidated
+  // manually or later reads within this process would see stale values.
+  config.invalidateGuildRowCache(GUILD_ID);
 
   // Clear previous bad words
   await pool.query('DELETE FROM bad_words WHERE guild_id = ?', [GUILD_ID]);
@@ -214,6 +217,7 @@ async function main() {
 
     // Test with warn action
     await pool.query("UPDATE guilds SET toxicity_action = 'warn' WHERE guild_id = ?", [GUILD_ID]);
+    config.invalidateGuildRowCache(GUILD_ID);
     await messageCreate.execute(mockMessage);
 
     assert.ok(deleted, 'Message should be deleted');
@@ -243,6 +247,7 @@ async function main() {
     };
 
     await pool.query("UPDATE guilds SET toxicity_action = 'mute' WHERE guild_id = ?", [GUILD_ID]);
+    config.invalidateGuildRowCache(GUILD_ID);
     await messageCreate.execute(mockMuteMessage);
 
     assert.ok(deleted, 'Muted message should be deleted');
@@ -268,6 +273,7 @@ async function main() {
 
     // Set global captcha channel in DB
     await pool.query("UPDATE guilds SET captcha_channel_id = ? WHERE guild_id = ?", [mockChannel.id, GUILD_ID]);
+    config.invalidateGuildRowCache(GUILD_ID);
 
     // 1. Click global start button
     const mockStartInteraction = {

@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const guildMemberAdd = require('../../src/events/guildMemberAdd');
 const { getPool } = require('../../src/db');
+const config = require('../../src/config');
 
 const GUILD_ID = '1509528553933242550';
 const MODLOG_CHANNEL_ID = '1509540775535579229';
@@ -28,6 +29,9 @@ async function main() {
          log_messages_enabled = 0`,
       [GUILD_ID, MODLOG_CHANNEL_ID, minDays]
     );
+    // Raw SQL bypasses config's setters, so the cached guild row must be invalidated
+    // manually or later reads within this process would see a stale min_account_age_days.
+    config.invalidateGuildRowCache(GUILD_ID);
   }
 
   let sendEmbeds = [];
