@@ -331,6 +331,18 @@ CREATE TABLE IF NOT EXISTS market_listings (
 );
 
 -- ============================================================
+-- Stage 21 Migration: Join Role
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN join_role_id BIGINT UNSIGNED NULL;
+
+-- ============================================================
+-- Stage 22 Migration: Multiple Roles & Unverified Roles
+-- ============================================================
+ALTER TABLE guilds ADD COLUMN join_role_ids VARCHAR(512) NULL;
+ALTER TABLE guilds ADD COLUMN verified_role_ids VARCHAR(512) NULL;
+ALTER TABLE guilds ADD COLUMN unverified_role_ids VARCHAR(512) NULL;
+
+-- ============================================================
 -- Stage 23 Migration: Announcements Lifecycle
 -- ============================================================
 -- Announcements-Verwaltung (Lifecycle: Vorschau → posten → bearbeiten/löschen)
@@ -349,20 +361,9 @@ CREATE TABLE IF NOT EXISTS announcements (
   created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   edited_at    DATETIME NULL,
   edited_by    BIGINT UNSIGNED NULL,
+  FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
   INDEX idx_guild_status (guild_id, status, id)
 );
-
--- ============================================================
--- Stage 21 Migration: Join Role
--- ============================================================
-ALTER TABLE guilds ADD COLUMN join_role_id BIGINT UNSIGNED NULL;
-
--- ============================================================
--- Stage 22 Migration: Multiple Roles & Unverified Roles
--- ============================================================
-ALTER TABLE guilds ADD COLUMN join_role_ids VARCHAR(512) NULL;
-ALTER TABLE guilds ADD COLUMN verified_role_ids VARCHAR(512) NULL;
-ALTER TABLE guilds ADD COLUMN unverified_role_ids VARCHAR(512) NULL;
 
 
 
