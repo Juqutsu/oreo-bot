@@ -1,9 +1,73 @@
 const { Events, EmbedBuilder, AuditLogEvent } = require('discord.js');
 const config = require('../config');
 const { resolveAuditExecutor } = require('../auditExecutor');
+const verifications = require('../verifications');
+
+/**
+ * Pure decision core — no DB/Discord I/O, unit-testable.
+ * Returns whether the member should now be treated as verified and which
+ * unverified role ids to strip (only those the member currently has).
+ */
+function decideVerification({ isBot, oldRoleIds, newRoleIds, verifiedRoleIds, unverifiedRoleIds, oldPartial }) {
+  if (isBot) return { verify: false, removeUnverified: [] };
+
+  const verifiedSet = new Set(verifiedRoleIds);
+  const hasVerifiedNow = newRoleIds.some((id) => verifiedSet.has(id));
+  if (!hasVerifiedNow) return { verify: false, removeUnverified: [] };
+
+  // If the old (cached) state already had a verified role, nothing new happened.
+  // When oldMember is partial we can't diff, so we reconcile (idempotent).
+  const hadVerifiedBefore = !oldPartial && oldRoleIds.some((id) => verifiedSet.has(id));
+  if (hadVerifiedBefore) return { verify: false, removeUnverified: [] };
+
+  const newSet = new Set(newRoleIds);
+  const removeUnverified = unverifiedRoleIds.filter((id) => newSet.has(id));
+  return { verify: true, removeUnverified };
+}
 
 async function execute(oldMember, newMember) {
+  if (!newMember) return;
+
   const guildId = newMember.guild.id;
+
+  // Handle manual verified-role assignment (manual-verify feature).
+  // Own try/catch so a feature-side failure can never suppress the server-logging below.
+  try {
+    const verifiedRoleIds = await config.getVerifiedRoleIds(guildId);
+    if (verifiedRoleIds.length > 0) {
+      const unverifiedRoleIds = await config.getUnverifiedRoleIds(guildId);
+
+      const oldPartial = oldMember?.partial === true;
+      const oldRoleIds = oldPartial ? [] : [...(oldMember?.roles?.cache?.keys() ?? [])];
+      const newRoleIds = [...(newMember.roles?.cache?.keys() ?? [])];
+
+      const { verify, removeUnverified } = decideVerification({
+        isBot: newMember.user?.bot === true,
+        oldRoleIds,
+        newRoleIds,
+        verifiedRoleIds,
+        unverifiedRoleIds,
+        oldPartial,
+      });
+      if (verify) {
+        // 1. Clear the verification deadline so the background sweep won't kick them.
+        await verifications.markVerified(guildId, newMember.id).catch((err) =>
+          console.error('[manual-verify] markVerified failed:', err));
+
+        // 2. Strip the unverified role(s) so the state matches a captcha-verified member.
+        for (const rId of removeUnverified) {
+          const role = newMember.guild.roles.cache.get(rId)
+            || await newMember.guild.roles.fetch(rId).catch(() => null);
+          if (role) {
+            await newMember.roles.remove(role, 'Oreo: Manuell verifiziert').catch((err) =>
+              console.error('[manual-verify] removing unverified role failed:', err));
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[manual-verify] guildMemberUpdate feature failed:', err);
+  }
 
   try {
     const serverLogChannelId = await config.getServerLogChannelId(guildId);
@@ -90,4 +154,5 @@ async function execute(oldMember, newMember) {
 module.exports = {
   name: Events.GuildMemberUpdate,
   execute,
+  _internal: { decideVerification },
 };
