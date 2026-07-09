@@ -30,8 +30,9 @@ async function execute(oldMember, newMember) {
 
   const guildId = newMember.guild.id;
 
-  // Handle manual verified-role assignment (manual-verify feature)
-  {
+  // Handle manual verified-role assignment (manual-verify feature).
+  // Own try/catch so a feature-side failure can never suppress the server-logging below.
+  try {
     const verifiedRoleIds = await config.getVerifiedRoleIds(guildId);
     if (verifiedRoleIds.length > 0) {
       const unverifiedRoleIds = await config.getUnverifiedRoleIds(guildId);
@@ -64,6 +65,8 @@ async function execute(oldMember, newMember) {
         }
       }
     }
+  } catch (err) {
+    console.error('[manual-verify] guildMemberUpdate feature failed:', err);
   }
 
   try {
