@@ -129,6 +129,34 @@ async function main() {
     console.log('✓ Test 4 passed (unauthorized clicker rejected, entry untouched)');
   }
 
+  // ---------- Test 4b: already-claimed entry is not acted on twice (double-click race) ----------
+  {
+    const voiceChannel = { id: 'vc-1', name: 'Lounge', members: new Map() };
+    let overwriteEdited = false;
+    voiceChannel.permissionOverwrites = { edit: async () => { overwriteEdited = true; } };
+    const guild = makeMockGuild({ voiceChannel });
+
+    pending.set('claimed-1', {
+      action: 'lockdown',
+      guildId: GUILD,
+      voiceChannelId: 'vc-1',
+      requesterId: REQUESTER_ID,
+      targetId: null,
+      expiresAt: Date.now() + 60_000,
+      claimed: true, // simulates the first of two near-simultaneous clicks having already claimed it
+    });
+    const interaction = makeInteraction({ customId: 'voiceconfirm:ok:claimed-1', userId: REQUESTER_ID, guild });
+
+    const handled = await voiceConfirm.dispatch(interaction);
+    assert.equal(handled, true);
+    assert.equal(interaction._replies.length, 1, 'second click gets an ephemeral reply, not an update');
+    assert.ok(interaction._replies[0].content.includes('bereits bearbeitet'));
+    assert.equal(overwriteEdited, false, 'the lockdown action itself never ran for the second click');
+    assert.equal(pending.has('claimed-1'), true, 'claimed entry is left in place (first click still owns cleanup)');
+    pending.delete('claimed-1');
+    console.log('✓ Test 4b passed (already-claimed entry rejects a second dispatch without acting)');
+  }
+
   // ---------- Test 5: cancel ("no") clears the pending entry ----------
   {
     pending.set('3', {

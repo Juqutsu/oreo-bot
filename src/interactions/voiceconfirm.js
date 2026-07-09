@@ -64,11 +64,21 @@ async function dispatch(interaction) {
 
   // Nur Anforderer oder Team (Supporter+) darf klicken.
   const isRequester = interaction.user.id === entry.requesterId;
-  const isStaff = await perms.hasTier(entry.guildId, interaction.member, 'supporter').catch(() => false);
+  const isStaff = isRequester ? true : await perms.hasTier(entry.guildId, interaction.member, 'supporter').catch(() => false);
   if (!isRequester && !isStaff) {
     await interaction.reply({ content: '❌ Diese Bestätigung ist nicht für dich.', flags: MessageFlags.Ephemeral }).catch(() => null);
     return true;
   }
+
+  // Synchroner Claim (kein await zwischen Read und Write) schließt die Doppelklick-Race:
+  // zwei nahezu gleichzeitige Klicks kommen beide an dieser Stelle an, aber nur der erste
+  // sieht entry.claimed === falsy und setzt es synchron auf true, bevor der zweite drankommt
+  // (gleiche Idee wie `session.posting` in announcement.js).
+  if (entry.claimed) {
+    await interaction.reply({ content: '⏳ Diese Bestätigung wird bereits bearbeitet.', flags: MessageFlags.Ephemeral }).catch(() => null);
+    return true;
+  }
+  entry.claimed = true;
 
   pending.delete(id);
 
@@ -106,6 +116,13 @@ async function dispatch(interaction) {
     const targetMember = await guild.members.fetch(entry.targetId).catch(() => null);
     if (!targetMember) {
       await interaction.update({ content: '❌ Ziel-User nicht mehr auf dem Server.', components: [] }).catch(() => null);
+      return true;
+    }
+    // Frische Team-Prüfung zum Ausführungszeitpunkt (Lockdown-Zweig macht das pro Mitglied
+    // bereits so) — das Ziel kann zwischen Sprachbefehl und Bestätigung befördert worden sein.
+    const targetIsStaff = await perms.hasTier(entry.guildId, targetMember, 'supporter').catch(() => false);
+    if (targetIsStaff) {
+      await interaction.update({ content: '❌ Ziel ist inzwischen Teammitglied — Mute abgebrochen.', components: [] }).catch(() => null);
       return true;
     }
     const durationMs = 5 * 60 * 1000;
