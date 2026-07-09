@@ -188,24 +188,43 @@ async function runDecayAndExpiry(client) {
 
       if (guild) {
         const member = await guild.members.fetch(userId).catch(() => null);
+        // memberGone: member already left → treat like a successful removal (clean up channel + row).
+        // kickOk: kick actually succeeded → clean up. kick failed → keep the verify channel so the
+        // user can still self-verify, but still remove the row to avoid a 60s retry storm.
+        let kickOk = true;
+        let memberGone = false;
         if (member) {
-          await member.kick('Oreo: Verifizierung abgelaufen').catch((err) =>
-            console.error(`[background] Verification kick failed for ${userId}:`, err));
-          try {
-            const logChannelId = await config.getModLogChannelId(guildId);
-            if (logChannelId) {
-              const logChannel = await guild.channels.fetch(logChannelId).catch(() => null);
-              if (logChannel) {
-                await logChannel.send({
-                  content: `⏳ Verifizierung abgelaufen: <@${userId}> wurde gekickt.`,
-                }).catch(() => null);
-              }
-            }
-          } catch (logErr) {
-            console.warn('[background] Verification-kick modlog failed:', logErr);
-          }
+          kickOk = await member
+            .kick('Oreo: Verifizierung abgelaufen')
+            .then(() => true)
+            .catch((err) => {
+              console.error(`[background] Verification kick failed for ${userId}:`, err);
+              return false;
+            });
+        } else {
+          memberGone = true;
         }
-        if (row.channel_id) {
+
+        try {
+          const logChannelId = await config.getModLogChannelId(guildId);
+          if (logChannelId) {
+            const logChannel = await guild.channels.fetch(logChannelId).catch(() => null);
+            if (logChannel) {
+              const content = kickOk
+                ? (memberGone
+                  ? `⏳ Verifizierung abgelaufen: <@${userId}> hatte den Server bereits verlassen.`
+                  : `⏳ Verifizierung abgelaufen: <@${userId}> wurde gekickt.`)
+                : `⚠️ Verifizierung von <@${userId}> ist abgelaufen, aber der Kick ist fehlgeschlagen (fehlende Berechtigung/Rollen-Hierarchie?). Bitte manuell prüfen.`;
+              await logChannel.send({ content }).catch(() => null);
+            }
+          }
+        } catch (logErr) {
+          console.warn('[background] Verification-kick modlog failed:', logErr);
+        }
+
+        // Only tear down the verify channel when the user is actually gone (kicked or left);
+        // if the kick failed, leaving the channel lets them still complete the captcha.
+        if (row.channel_id && (kickOk || memberGone)) {
           const chan = await guild.channels.fetch(row.channel_id.toString()).catch(() => null);
           if (chan) await chan.delete('Oreo: Verifizierung abgelaufen').catch(() => null);
         }
