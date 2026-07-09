@@ -26,9 +26,7 @@ function decideVerification({ isBot, oldRoleIds, newRoleIds, verifiedRoleIds, un
 }
 
 async function execute(oldMember, newMember) {
-  if (!newMember || newMember.user?.bot) {
-    return;
-  }
+  if (!newMember) return;
 
   const guildId = newMember.guild.id;
 
@@ -43,7 +41,7 @@ async function execute(oldMember, newMember) {
       const newRoleIds = [...(newMember.roles?.cache?.keys() ?? [])];
 
       const { verify, removeUnverified } = decideVerification({
-        isBot: false,
+        isBot: newMember.user?.bot === true,
         oldRoleIds,
         newRoleIds,
         verifiedRoleIds,
