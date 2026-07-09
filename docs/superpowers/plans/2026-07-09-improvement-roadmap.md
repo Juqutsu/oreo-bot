@@ -98,3 +98,11 @@ Ideen, keine Zusagen — jede braucht eine kurze Design-Runde:
 ## Vorgehen bei Umsetzung
 
 Pro Welle: `superpowers:writing-plans` → SDD-Ausführung (Subagent pro Task + Review) → Feature-Branch → Final-Review → Merge auf `main` (CI validiert + deployt). Welle 1 überspringt das Planning (Specs fertig). CLAUDE.md nach jeder Welle aktualisieren.
+
+---
+
+## Nachträge aus Welle 1 (2026-07-09, Follow-ups)
+
+- **captcha markVerified DB-Fehler-Residual:** wirft der `markVerified`-DELETE beim Lösen selbst (transienter DB-Fehler, gefangen+geloggt), behält der User verifizierte Rollen, aber die pending-Row bleibt → theoretischer Deadline-Kick binnen 15 min. Nur DB-Fehler-Randfall. Fix-Richtung: bei markVerified-Fehler die Rollenvergabe abbrechen oder einen zweiten Löschversuch im Sweep.
+- **captcha pick-Branch ohne Doppelklick-Claim** (vorbestehend): schneller Doppelklick feuert idempotente Rollenarbeit / no-op-zweiten-Kick. Geringe Auswirkung. Claim analog voiceconfirm/announcement nachrüsten.
+- **confirmed-mute createCase-Fehler wird geloggt, nicht revertiert** (voiceconfirm.js, bewusst — Voice-UX hat keinen Ort für ein Undo). Nur falls es in der Praxis auffällt.
