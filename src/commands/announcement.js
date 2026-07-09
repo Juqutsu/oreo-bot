@@ -325,7 +325,7 @@ module.exports = {
       }
 
       const choices = filtered.map((r) => ({
-        name: `#${r.id} · ${truncate(r.title, 60)} · vor ${formatDayMonth(r.created_at)}`,
+        name: `#${r.id} · ${truncate(r.title, 60)} · ${formatFullDate(r.created_at)}`,
         value: String(r.id),
       }));
 
