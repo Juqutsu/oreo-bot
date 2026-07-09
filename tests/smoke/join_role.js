@@ -112,7 +112,10 @@ async function main() {
         removedRoles.push({ roleId: rId, reason });
         currentMemberRoles = currentMemberRoles.filter(id => id !== rId);
       }
-    }
+    },
+    // Shared verify channel welcome DM (guildMemberAdd.js) — real GuildMembers always
+    // have `.send`, this stub just keeps the mock complete.
+    send: async () => {}
   };
 
   const mockGuild = {
@@ -167,6 +170,9 @@ async function main() {
     mockMember.client = {
       user: { id: 'bot_id' }
     };
+    // getOrCreateSharedVerifyChannel(guild) reads guild.client.user.id (not member.client),
+    // since it only ever receives the guild, never the member.
+    mockMember.guild.client = mockMember.client;
     
     await guildMemberAdd.execute(mockMember);
 

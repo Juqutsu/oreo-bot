@@ -1,8 +1,9 @@
-const { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Events, EmbedBuilder } = require('discord.js');
 const config = require('../config');
 const cases = require('../cases');
 const verifications = require('../verifications');
 const { getMutedRole } = require('../composables/mutedRole');
+const { getOrCreateSharedVerifyChannel } = require('../composables/verifyChannel');
 const { formatDuration } = require('../duration');
 
 // Anti-Raid State
@@ -119,78 +120,18 @@ async function execute(member) {
   try {
     const captchaEnabled = (await config.getCaptchaEnabled(guildId)) || isRaidActive;
     if (captchaEnabled) {
-      const captchaChannelId = await config.getCaptchaChannelId(guildId);
-      const everyone = member.guild.roles.everyone;
-      const botId = member.client.user.id;
-
-      let verifyChannel = null;
-
-      if (captchaChannelId) {
-        verifyChannel = await member.guild.channels.fetch(captchaChannelId).catch(() => null);
-        if (verifyChannel) {
-          // Welcome member in DMs and point to verify channel
-          await member.send({
-            content: `Willkommen auf **${member.guild.name}**! Bitte verifiziere dich im kanal <#${captchaChannelId}>, um vollen Zugriff auf den Server zu erhalten.`
-          }).catch(() => {});
-        }
-      }
-
-      const isGlobal = !!verifyChannel;
-
-      if (!isGlobal) {
-        verifyChannel = await member.guild.channels.create({
-          name: `verify-${member.user.id}`,
-          type: 0,
-          permissionOverwrites: [
-            {
-              id: everyone.id,
-              deny: ['ViewChannel'],
-            },
-            {
-              id: member.id,
-              allow: ['ViewChannel', 'ReadMessageHistory'],
-              deny: ['SendMessages', 'AddReactions'],
-            },
-            {
-              id: botId,
-              allow: ['ViewChannel', 'SendMessages', 'ManageChannels', 'ManageRoles', 'ReadMessageHistory'],
-            }
-          ],
-          reason: 'Oreo Captcha-Verifizierung Setup',
-        });
-
-        const descriptionText = isRaidActive
-          ? `⚠️ **SICHERHEITS-PANIKMODUS AKTIV!**\n\nAufgrund von verdächtigen Beitrittswellen wurde für **${member.guild.name}** die Captcha-Verifizierung temporär für alle neuen User aktiviert.\n\nBitte klicke auf den Button unten, um dich zu verifizieren!`
-          : `Willkommen auf **${member.guild.name}**, <@${member.user.id}>!\n\nUm den Server freizuschalten, musst du dich verifizieren.\n\nKlicke auf den Button unten, um das Captcha zu starten.`;
-
-        const embed = new EmbedBuilder()
-          .setTitle('🔐 Server-Verifizierung')
-          .setColor(0x3498db)
-          .setDescription(descriptionText)
-          .setFooter({ text: '🐾 Oreo • Verifizierung' })
-          .setTimestamp();
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`captcha_start_${member.id}`)
-            .setLabel('Verifizierung starten')
-            .setStyle(ButtonStyle.Primary)
-        );
-
-        await verifyChannel.send({
-          content: `<@${member.id}>`,
-          embeds: [embed],
-          components: [row]
-        });
-      }
+      // Ein geteilter Verifizierungs-Kanal für alle statt eines Kanals pro Joiner —
+      // pro-User-Kanäle haben eine Raid-Welle in ein Rate-Limit-DoS verwandelt
+      // (N Joins = N Channel-Erstellungen). Erstellung ist pro Guild dedupliziert,
+      // siehe getOrCreateSharedVerifyChannel.
+      const verifyChannel = await getOrCreateSharedVerifyChannel(member.guild);
+      await member.send({
+        content: `Willkommen auf **${member.guild.name}**! Bitte verifiziere dich in <#${verifyChannel.id}>, um vollen Zugriff zu erhalten.`,
+      }).catch(() => {});
 
       // Restart-sicher: Deadline in DB, Sweep läuft im Background-Loop.
-      await verifications.trackJoin(
-        guildId,
-        member.id,
-        isGlobal ? null : verifyChannel?.id ?? null,
-        15,
-      );
+      // channelId ist immer null: der geteilte Kanal darf vom Sweep nie gelöscht werden.
+      await verifications.trackJoin(guildId, member.id, null, 15);
     }
   } catch (err) {
     console.error('[captcha-verification] failed to initiate verification channel:', err);
