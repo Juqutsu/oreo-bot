@@ -176,9 +176,16 @@ async function main() {
     assert.equal(assignedRoles[1].roleId, JOIN_ROLE_2);
     assert.equal(removedRoles.length, 0);
 
-    // Now trigger correct Captcha interaction (simulating verification success)
+    // Now trigger correct Captcha interaction (simulating verification success).
+    // Seed the server-side puzzle state directly — the answer no longer lives in the customId.
+    captcha._internal.pendingPuzzles.set(`${GUILD_ID}:1509540000000000001`, {
+      correctEmoji: '🍎',
+      options: ['🍎', '🍌', '🍇', '🍍', '🍒'],
+      attempt: 1,
+      expiresAt: Date.now() + 60_000,
+    });
     const mockInteraction = {
-      customId: `captcha_correct_1509540000000000001_1_🍎`,
+      customId: `captcha_pick_1509540000000000001_0`,
       user: { id: '1509540000000000001' },
       guild: mockGuild,
       channel: mockChannel,
@@ -222,8 +229,14 @@ async function main() {
     await guildMemberAdd.execute(mockMember);
 
     // Now trigger correct Captcha interaction
+    captcha._internal.pendingPuzzles.set(`${GUILD_ID}:1509540000000000001`, {
+      correctEmoji: '🍎',
+      options: ['🍎', '🍌', '🍇', '🍍', '🍒'],
+      attempt: 1,
+      expiresAt: Date.now() + 60_000,
+    });
     const mockInteraction = {
-      customId: `captcha_correct_1509540000000000001_1_🍎`,
+      customId: `captcha_pick_1509540000000000001_0`,
       user: { id: '1509540000000000001' },
       guild: mockGuild,
       channel: mockChannel,

@@ -126,8 +126,16 @@ async function main() {
     deletedChannels = [];
     sentEmbeds = [];
 
+    // Seed the server-side puzzle state (answers no longer live in the customId).
+    captcha._internal.pendingPuzzles.set(`${GUILD_ID}:1509540000000000001`, {
+      correctEmoji: '🍎',
+      options: ['🍎', '🍌', '🍇', '🍍', '🍒'],
+      attempt: 1,
+      expiresAt: Date.now() + 60_000,
+    });
+
     const mockInteraction = {
-      customId: `captcha_correct_1509540000000000001_1_🍎`,
+      customId: `captcha_pick_1509540000000000001_0`,
       user: { id: '1509540000000000001' },
       guild: mockGuild,
       channel: mockChannel,
@@ -158,8 +166,17 @@ async function main() {
     sentEmbeds = [];
 
     let replies = [];
+
+    // Seed a server-side puzzle already at the final attempt with a wrong pick.
+    captcha._internal.pendingPuzzles.set(`${GUILD_ID}:1509540000000000001`, {
+      correctEmoji: '🍎',
+      options: ['🍌', '🍎', '🍇', '🍍', '🍒'],
+      attempt: 3,
+      expiresAt: Date.now() + 60_000,
+    });
+
     const mockInteraction = {
-      customId: `captcha_wrong_1509540000000000001_3_🍌`,
+      customId: `captcha_pick_1509540000000000001_0`,
       user: { id: '1509540000000000001' },
       guild: mockGuild,
       channel: mockChannel,
@@ -292,9 +309,16 @@ async function main() {
     assert.equal(replies.length, 1, 'Should send ephemeral captcha reply');
     assert.ok(replies[0].flags === MessageFlags.Ephemeral || replies[0].ephemeral, 'Reply should be ephemeral');
 
-    // 2. Click correct emoji
+    // 2. Click correct emoji — resolve the actual correct index from the server-side
+    // puzzle state the global-start click just generated (the answer is no longer
+    // encoded in the customId, so it can't be hardcoded here).
+    const puzzleEntry = captcha._internal.pendingPuzzles.get(`${GUILD_ID}:1509540000000000001`);
+    assert.ok(puzzleEntry, 'Global start should store a server-side puzzle entry');
+    const correctIndex = puzzleEntry.options.indexOf(puzzleEntry.correctEmoji);
+    assert.ok(correctIndex >= 0, 'correct emoji should be among the stored options');
+
     const mockCorrectInteraction = {
-      customId: `captcha_correct_1509540000000000001_1_🍎`,
+      customId: `captcha_pick_1509540000000000001_${correctIndex}`,
       user: { id: '1509540000000000001' },
       guild: mockGuild,
       channel: mockChannel,
