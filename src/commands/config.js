@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getPool } = require('../db');
 const { invalidateGuildRowCache } = require('../config');
+const { getVoiceConnection } = require('@discordjs/voice');
 const escalations = require('../escalations');
 const { parseDuration, formatDuration, MAX_TIMEOUT_MS } = require('../duration');
 
@@ -1896,6 +1897,11 @@ async function handleVoiceSet(interaction) {
     if (enabled !== null) {
       await config.setVoiceRecEnabled(interaction.guildId, enabled);
       updates.push(`Aktiviert: **${enabled ? 'Ja' : 'Nein'}**`);
+      if (!enabled) {
+        // Deaktivierung greift sofort: Verbindung sofort kappen, statt auf die
+        // nächste transkribierte Äußerung in speech.js zu warten (siehe invariant 17).
+        getVoiceConnection(interaction.guildId)?.destroy();
+      }
     }
     if (channel !== null) {
       await config.setVoiceRecChannelId(interaction.guildId, channel.id);
