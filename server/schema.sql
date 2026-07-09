@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS guild_users (
   user_id     BIGINT UNSIGNED NOT NULL,
   username    VARCHAR(32) NULL,
   currency    INT UNSIGNED NOT NULL DEFAULT 0,
+  level       INT UNSIGNED NULL,
   updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (guild_id, user_id),
   FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE
@@ -379,6 +380,14 @@ CREATE TABLE IF NOT EXISTS pending_verifications (
   FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
   INDEX idx_deadline (deadline_at)
 );
+
+-- ============================================================
+-- Stage 25 Migration: guild_users.level (Ramen-Level → supporter grant)
+-- On the shared Ramen DB this column already exists → errno 1060 is swallowed
+-- by src/schema.js; on a fresh/standalone Oreo DB it is created above and this
+-- ALTER is a no-op. Fixes perms.getEffectiveTier's ER_BAD_FIELD_ERROR.
+-- ============================================================
+ALTER TABLE guild_users ADD COLUMN level INT UNSIGNED NULL;
 
 
 
