@@ -1,6 +1,7 @@
 const { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const config = require('../config');
 const cases = require('../cases');
+const verifications = require('../verifications');
 const { getMutedRole } = require('../composables/mutedRole');
 const { formatDuration } = require('../duration');
 
@@ -183,47 +184,13 @@ async function execute(member) {
         });
       }
 
-      setTimeout(async () => {
-        try {
-          const currentMember = await member.guild.members.fetch(member.id).catch(() => null);
-          if (currentMember) {
-            let verifiedRoleIds = [];
-            try {
-              verifiedRoleIds = await config.getVerifiedRoleIds(guildId);
-            } catch (dbErr) {
-              console.error('[captcha-timeout] Fehler beim Abrufen der verifizierten Rollen:', dbErr);
-              return;
-            }
-
-            const hasRole = verifiedRoleIds.length > 0
-              ? verifiedRoleIds.some(rId => currentMember.roles.cache.has(rId))
-              : false;
-            if (!hasRole) {
-              await currentMember.kick('Oreo: Verifizierung abgelaufen').catch(() => null);
-              const logChannelId = await config.getModLogChannelId(guildId).catch(() => null);
-              if (logChannelId) {
-                const logChannel = await member.guild.channels.fetch(logChannelId).catch(() => null);
-                if (logChannel) {
-                  const logEmbed = new EmbedBuilder()
-                    .setTitle('Verifizierung abgelaufen')
-                    .setColor(0xe74c3c)
-                    .setDescription(`Die Verifizierungszeit für <@${member.user.id}> (${member.user.tag}) ist abgelaufen. Der User wurde gekickt.`)
-                    .setTimestamp();
-                  await logChannel.send({ embeds: [logEmbed] }).catch(() => null);
-                }
-              }
-            }
-          }
-          if (!isGlobal && verifyChannel) {
-            const chan = await member.guild.channels.fetch(verifyChannel.id).catch(() => null);
-            if (chan) {
-              await chan.delete('Oreo: Verifizierung abgelaufen').catch(() => null);
-            }
-          }
-        } catch (timeoutErr) {
-          console.error('[captcha-timeout] Fehler waehrend des Verifizierungs-Timeouts:', timeoutErr);
-        }
-      }, 15 * 60 * 1000);
+      // Restart-sicher: Deadline in DB, Sweep läuft im Background-Loop.
+      await verifications.trackJoin(
+        guildId,
+        member.id,
+        isGlobal ? null : verifyChannel?.id ?? null,
+        15,
+      );
     }
   } catch (err) {
     console.error('[captcha-verification] failed to initiate verification channel:', err);

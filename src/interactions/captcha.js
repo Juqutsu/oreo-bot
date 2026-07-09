@@ -1,5 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const config = require('../config');
+const verifications = require('../verifications');
 
 const EMOJIS = [
   { emoji: '🍎', name: 'Apfel' },
@@ -154,6 +155,8 @@ async function dispatch(interaction) {
 
     if (pickedEmoji === entry.correctEmoji) {
       pendingPuzzles.delete(key);
+      await verifications.markVerified(guild.id, targetUserId).catch((err) =>
+        console.error('[captcha] markVerified failed:', err));
       await interaction.deferUpdate();
 
       let assignedRoleText = '';
@@ -298,6 +301,7 @@ async function dispatch(interaction) {
         await member.kick('Oreo: Captcha-Verifizierung fehlgeschlagen (3 Fehlversuche)').catch((err) => {
           console.error(`[captcha] Failed to kick user ${targetUserId}:`, err);
         });
+        await verifications.remove(guild.id, targetUserId).catch(() => null);
 
         try {
           const channelId = await config.getModLogChannelId(guild.id);

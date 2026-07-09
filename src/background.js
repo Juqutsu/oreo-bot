@@ -1,6 +1,7 @@
 const { getPool } = require('./db');
 const cases = require('./cases');
 const config = require('./config');
+const verifications = require('./verifications');
 const { buildModLogEmbed } = require('./modlog');
 
 async function runDecayAndExpiry(client) {
@@ -175,6 +176,44 @@ async function runDecayAndExpiry(client) {
     }
   } catch (err) {
     console.error('[background] Error processing warn decay:', err);
+  }
+
+  // 5. Abgelaufene Captcha-Verifizierungen (restart-sicher, ersetzt setTimeout)
+  try {
+    const expired = await verifications.listExpired();
+    for (const row of expired) {
+      const guildId = row.guild_id.toString();
+      const userId = row.user_id.toString();
+      const guild = await client.guilds.fetch(guildId).catch(() => null);
+
+      if (guild) {
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (member) {
+          await member.kick('Oreo: Verifizierung abgelaufen').catch((err) =>
+            console.error(`[background] Verification kick failed for ${userId}:`, err));
+          try {
+            const logChannelId = await config.getModLogChannelId(guildId);
+            if (logChannelId) {
+              const logChannel = await guild.channels.fetch(logChannelId).catch(() => null);
+              if (logChannel) {
+                await logChannel.send({
+                  content: `⏳ Verifizierung abgelaufen: <@${userId}> wurde gekickt.`,
+                }).catch(() => null);
+              }
+            }
+          } catch (logErr) {
+            console.warn('[background] Verification-kick modlog failed:', logErr);
+          }
+        }
+        if (row.channel_id) {
+          const chan = await guild.channels.fetch(row.channel_id.toString()).catch(() => null);
+          if (chan) await chan.delete('Oreo: Verifizierung abgelaufen').catch(() => null);
+        }
+      }
+      await verifications.remove(guildId, userId);
+    }
+  } catch (err) {
+    console.error('[background] Error processing expired verifications:', err);
   }
 }
 

@@ -365,6 +365,21 @@ CREATE TABLE IF NOT EXISTS announcements (
   INDEX idx_guild_status (guild_id, status, id)
 );
 
+-- ============================================================
+-- Stage 24 Migration: Persistent Verification Deadlines
+-- ============================================================
+-- Offene Captcha-Verifizierungen (überlebt Bot-Restarts; Sweep im Background-Loop)
+CREATE TABLE IF NOT EXISTS pending_verifications (
+  guild_id    BIGINT UNSIGNED NOT NULL,
+  user_id     BIGINT UNSIGNED NOT NULL,
+  channel_id  BIGINT UNSIGNED NULL,
+  deadline_at DATETIME NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (guild_id, user_id),
+  FOREIGN KEY (guild_id) REFERENCES guilds(guild_id) ON DELETE CASCADE,
+  INDEX idx_deadline (deadline_at)
+);
+
 
 
 
