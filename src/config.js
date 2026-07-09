@@ -19,21 +19,38 @@ const badWordsCache = new Map();
 // guildId -> in-flight getBadWords() cache-fill Promise (same coalescing as rowInflight above).
 const badWordsInflight = new Map();
 
+// guildId -> generation token for rowCache. Incremented on invalidation; fetch only writes if unchanged.
+// Prevents a racing fetch from populating the cache with stale data after invalidation.
+const rowCacheGeneration = new Map();
+// guildId -> generation token for badWordsCache. Same purpose as rowCacheGeneration.
+const badWordsCacheGeneration = new Map();
+
 /**
  * Invalidiert die gecachte Guild-Row. Wird von JEDEM Setter direkt nach seinem
  * UPDATE aufgerufen, damit der nächste Read wieder frische Daten aus der DB liest.
+ * Auch löscht in-flight Promises und inkrementiert die Generation, damit ein racing
+ * fetch nicht alte Daten schreiben kann.
  * @param {string} guildId
  */
 function invalidateGuildRowCache(guildId) {
   rowCache.delete(guildId);
+  rowInflight.delete(guildId);
+  // Increment generation to signal in-flight fetches that their data is stale.
+  const currentGen = rowCacheGeneration.get(guildId) ?? 0;
+  rowCacheGeneration.set(guildId, currentGen + 1);
 }
 
 /**
  * Invalidiert den gecachten Bad-Words-Eintrag einer Guild.
+ * Auch löscht in-flight Promises und inkrementiert die Generation.
  * @param {string} guildId
  */
 function invalidateBadWordsCache(guildId) {
   badWordsCache.delete(guildId);
+  badWordsInflight.delete(guildId);
+  // Increment generation to signal in-flight fetches that their data is stale.
+  const currentGen = badWordsCacheGeneration.get(guildId) ?? 0;
+  badWordsCacheGeneration.set(guildId, currentGen + 1);
 }
 
 /**
@@ -49,13 +66,19 @@ async function readGuildRow(guildId) {
 
   if (rowInflight.has(guildId)) return rowInflight.get(guildId);
 
+  // Capture generation before fetch to detect invalidation races.
+  const generationAtFetchStart = rowCacheGeneration.get(guildId) ?? 0;
+
   const fetchPromise = (async () => {
     const [rows] = await getPool().execute(
       'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, join_role_id, join_role_ids, verified_role_ids, unverified_role_ids, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message, welcome_banner_enabled, leave_banner_enabled, welcome_banner_text, leave_banner_text FROM guilds WHERE guild_id = ?',
       [guildId],
     );
     const row = rows[0] ?? null;
-    rowCache.set(guildId, { row, fetchedAt: Date.now() });
+    // Only write to cache if generation hasn't changed (invalidation hasn't occurred).
+    if (rowCacheGeneration.get(guildId) === generationAtFetchStart) {
+      rowCache.set(guildId, { row, fetchedAt: Date.now() });
+    }
     return row;
   })();
 
@@ -386,6 +409,9 @@ async function getBadWords(guildId) {
 
   if (badWordsInflight.has(guildId)) return badWordsInflight.get(guildId);
 
+  // Capture generation before fetch to detect invalidation races.
+  const generationAtFetchStart = badWordsCacheGeneration.get(guildId) ?? 0;
+
   const fetchPromise = (async () => {
     const [rows] = await getPool().execute(
       'SELECT word FROM bad_words WHERE guild_id = ? ORDER BY word ASC',
@@ -393,7 +419,10 @@ async function getBadWords(guildId) {
     );
     const words = rows.map((r) => r.word);
     const normalized = words.map((word) => ({ word, normalized: normalize(word) }));
-    badWordsCache.set(guildId, { words, normalized, fetchedAt: Date.now() });
+    // Only write to cache if generation hasn't changed (invalidation hasn't occurred).
+    if (badWordsCacheGeneration.get(guildId) === generationAtFetchStart) {
+      badWordsCache.set(guildId, { words, normalized, fetchedAt: Date.now() });
+    }
     return words;
   })();
 
