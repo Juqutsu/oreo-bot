@@ -7,18 +7,20 @@
 # Usage: npm run test:local  (see package.json)
 # Teardown: docker compose -f docker-compose.dev.yml down
 
+name: oreo-dev
+
 services:
   mysql:
     image: mysql:8.4
     container_name: oreo-mysql-dev
-    restart: unless-stopped
+    restart: "no"
     environment:
       MYSQL_ROOT_PASSWORD: root_test_pass
       MYSQL_DATABASE: oreo_test
       MYSQL_USER: oreo_test
       MYSQL_PASSWORD: oreo_test_pass
     ports:
-      - '3310:3306'
+      - '127.0.0.1:3310:3306'
     volumes:
       - oreo_test_db:/var/lib/mysql
     healthcheck:
