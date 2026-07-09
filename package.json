@@ -16,7 +16,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node --env-file=.env index.js",
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "test:local": "docker compose -f docker-compose.dev.yml up -d --wait && node --env-file=.env.test tests/run.js"
   },
   "engines": {
     "node": ">=20.6"

@@ -1,0 +1,31 @@
+# Local dev-only MySQL for running the test suite against a real database.
+# Mirrors the CI service in .github/workflows/deploy.yml (same creds/DB name)
+# so `.env.test` works identically locally and in CI. NOT used in production —
+# see docker-compose.yml for the prod bot service (which points at its own
+# `mysql` container on the external `discord_bot_net` network).
+#
+# Usage: npm run test:local  (see package.json)
+# Teardown: docker compose -f docker-compose.dev.yml down
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: oreo-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_test_pass
+      MYSQL_DATABASE: oreo_test
+      MYSQL_USER: oreo_test
+      MYSQL_PASSWORD: oreo_test_pass
+    ports:
+      - '3310:3306'
+    volumes:
+      - oreo_test_db:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  oreo_test_db:

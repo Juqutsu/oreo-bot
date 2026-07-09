@@ -3,7 +3,7 @@ name: Deploy Oreo Bot
 on:
   push:
     branches:
-      - main
+      - '**'
 
 jobs:
   test:
@@ -47,6 +47,7 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
