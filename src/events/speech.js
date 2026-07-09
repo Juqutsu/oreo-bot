@@ -1,5 +1,6 @@
 const config = require('../config');
 const perms = require('../perms');
+const voiceConfirm = require('../interactions/voiceconfirm');
 
 module.exports = {
   name: 'speech',
@@ -27,8 +28,15 @@ module.exports = {
       if (!channelId) return;
 
       const cleanText = msg.content.toLowerCase().trim();
-      const hasOreo = cleanText.includes('oreo');
-      if (!hasOreo) return;
+
+      // Wortbasiertes Matching: Befehl muss ein eigenes Wort DIREKT nach "oreo"
+      // sein — "Oreo Banane" darf nicht mehr als "ban" zählen (frühere
+      // Substring-Suche löste sonst bei ganz normaler Konversation aus).
+      const words = cleanText.split(/[^a-zäöüß0-9-]+/).filter(Boolean);
+      const oreoIdx = words.indexOf('oreo');
+      if (oreoIdx === -1) return;
+      const cmd = words[oreoIdx + 1] ?? '';
+      const rest = words.slice(oreoIdx + 2);
 
       // Fetch member to check permission tiers (safely check guild.members for test mocking)
       const member = (guild.members && msg.author?.id)
@@ -37,11 +45,8 @@ module.exports = {
 
       const isStaff = member ? await perms.hasTier(guildId, member, 'supporter') : false;
 
-      // 1. Original Oreo Ban
-      const hasBan = cleanText.includes('ban') || cleanText.includes('bann') || cleanText.includes('band');
-      const isOreoBan = hasBan || cleanText.includes('oreoban') || cleanText.includes('oreo-ban');
-
-      if (isOreoBan) {
+      // 1. Meme-Reply: "Oreo ban", "Oreo bann", "Oreo band"
+      if (['ban', 'bann', 'band', 'oreoban'].includes(cmd)) {
         const targetChannel = await guild.channels.fetch(channelId).catch(() => null);
         if (targetChannel) {
           const responseMessage = await config.getVoiceRecMessage(guildId);
@@ -51,9 +56,8 @@ module.exports = {
         return;
       }
 
-      // 2. Voice support call: "Oreo hilf mir", "Oreo support", "Oreo hilfe"
-      const isSupportCall = cleanText.includes('hilf') || cleanText.includes('hilfe') || cleanText.includes('support') || cleanText.includes('supporter');
-      if (isSupportCall) {
+      // 2. Support-Ruf: "Oreo hilf", "Oreo hilfe", "Oreo support", "Oreo supporter"
+      if (['hilf', 'hilfe', 'support', 'supporter'].includes(cmd)) {
         const targetChannel = await guild.channels.fetch(channelId).catch(() => null);
         if (targetChannel) {
           await targetChannel.send(`🚨 **Voice Support-Ruf:** <@${msg.author.id}> (${msg.author.tag}) benötigt Hilfe im Sprachkanal **${msg.channel.name}**!`);
@@ -62,35 +66,26 @@ module.exports = {
         return;
       }
 
-      // 3. Voice lockdown: "Oreo ruhe", "Oreo lockdown", "Oreo leise", "Oreo stop"
-      const isLockdownCall = cleanText.includes('ruhe') || cleanText.includes('lockdown') || cleanText.includes('leise') || cleanText.includes('stop');
-      if (isLockdownCall) {
+      // 3. Lockdown — destruktiv → Button-Bestätigung. "Oreo lockdown", "Oreo ruhe"
+      if (['lockdown', 'ruhe'].includes(cmd)) {
         if (!isStaff) {
           await msg.channel.send(`❌ <@${msg.author.id}>, dir fehlt das Supporter-Tier für diesen Befehl.`);
           return;
         }
-
-        // Lock channel speaking rights
-        await msg.channel.permissionOverwrites.edit(guild.roles.everyone, { Speak: false }).catch(() => {});
-        
-        // Server-mute non-staff members in VC
-        let mutedCount = 0;
-        for (const m of msg.channel.members.values()) {
-          if (m.user.bot) continue;
-          const isTargetStaff = await perms.hasTier(guildId, m, 'supporter');
-          if (!isTargetStaff) {
-            await m.voice.setMute(true, 'Oreo Sprach-Lockdown').catch(() => {});
-            mutedCount++;
-          }
+        const targetChannel = await guild.channels.fetch(channelId).catch(() => null);
+        if (targetChannel) {
+          await voiceConfirm.requestConfirmation({
+            textChannel: targetChannel,
+            voiceChannel: msg.channel,
+            requester: msg.author,
+            action: 'lockdown',
+          });
         }
-
-        await msg.channel.send(`🔒 **Voice-Lockdown:** Sprachkanal wurde durch <@${msg.author.id}> gesperrt. ${mutedCount} User stummgeschaltet.`);
         return;
       }
 
-      // 4. Voice unlock: "Oreo aufheben", "Oreo unlock", "Oreo sprechen", "Oreo laut"
-      const isUnlockCall = cleanText.includes('aufheben') || cleanText.includes('unlock') || cleanText.includes('sprechen') || cleanText.includes('laut');
-      if (isUnlockCall) {
+      // 4. Unlock — restaurativ, bleibt direkt. "Oreo unlock", "Oreo aufheben"
+      if (['unlock', 'aufheben'].includes(cmd)) {
         if (!isStaff) {
           await msg.channel.send(`❌ <@${msg.author.id}>, dir fehlt das Supporter-Tier für diesen Befehl.`);
           return;
@@ -98,7 +93,7 @@ module.exports = {
 
         // Reset speak override
         await msg.channel.permissionOverwrites.edit(guild.roles.everyone, { Speak: null }).catch(() => {});
-        
+
         // Server-unmute everyone in VC
         for (const m of msg.channel.members.values()) {
           await m.voice.setMute(false, 'Oreo Sprach-Unlock').catch(() => {});
@@ -108,47 +103,45 @@ module.exports = {
         return;
       }
 
-      // 5. Voice mute: "Oreo mute [name]", "Oreo stumm [name]", "Oreo timeout [name]"
-      const isMuteCall = cleanText.includes('mute') || cleanText.includes('stumm') || cleanText.includes('timeout') || cleanText.includes('stummschalten');
-      if (isMuteCall) {
+      // 5. Voice-Mute — destruktiv → Button-Bestätigung. "Oreo mute [Name]", "Oreo stumm [Name]", "Oreo timeout [Name]"
+      if (['mute', 'stumm', 'stummschalten', 'timeout'].includes(cmd)) {
         if (!isStaff) {
           await msg.channel.send(`❌ <@${msg.author.id}>, dir fehlt das Supporter-Tier für diesen Befehl.`);
           return;
         }
 
-        // Clean name parameter
-        let namePart = cleanText
-          .replace('oreo', '')
-          .replace('stummschalten', '')
-          .replace('stumm', '')
-          .replace('timeout', '')
-          .replace('mute', '')
-          .trim();
-
+        const namePart = rest.join(' ').trim();
         if (namePart.length < 2) {
           await msg.channel.send(`❓ Bitte nenne einen Namen (z. B. "Oreo mute Lukas").`);
           return;
         }
 
         const vcMembers = [...msg.channel.members.values()];
-        const targetMember = vcMembers.find(m => 
-          m.displayName.toLowerCase().includes(namePart) || 
+        const targetMember = vcMembers.find((m) =>
+          m.displayName.toLowerCase().includes(namePart) ||
           m.user.username.toLowerCase().includes(namePart)
         );
 
-        if (targetMember) {
-          const targetIsStaff = await perms.hasTier(guildId, targetMember, 'supporter');
-          if (targetIsStaff) {
-            await msg.channel.send(`❌ <@${msg.author.id}>, ich kann andere Teammitglieder nicht stummschalten!`);
-          } else {
-            // Timeout target for 5 minutes
-            await targetMember.timeout(5 * 60 * 1000, `Sprach-Mute durch ${msg.author.tag}`).catch(() => {});
-            // Also server-mute in voice channel
-            await targetMember.voice.setMute(true, `Sprach-Mute durch ${msg.author.tag}`).catch(() => {});
-            await msg.channel.send(`🔇 **Sprach-Mute:** <@${targetMember.id}> wurde für 5 Minuten stummgeschaltet.`);
-          }
-        } else {
+        if (!targetMember) {
           await msg.channel.send(`❓ Ich konnte kein Mitglied namens "${namePart}" im Sprachkanal finden.`);
+          return;
+        }
+
+        const targetIsStaff = await perms.hasTier(guildId, targetMember, 'supporter');
+        if (targetIsStaff) {
+          await msg.channel.send(`❌ <@${msg.author.id}>, ich kann andere Teammitglieder nicht stummschalten!`);
+          return;
+        }
+
+        const targetChannel = await guild.channels.fetch(channelId).catch(() => null);
+        if (targetChannel) {
+          await voiceConfirm.requestConfirmation({
+            textChannel: targetChannel,
+            voiceChannel: msg.channel,
+            requester: msg.author,
+            action: 'mute',
+            targetMember,
+          });
         }
         return;
       }

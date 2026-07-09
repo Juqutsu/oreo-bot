@@ -9,6 +9,7 @@ const reportInteractions = require('./src/interactions/report');
 const announcementInteractions = require('./src/interactions/announcement');
 const captchaInteractions = require('./src/interactions/captcha');
 const welcomeInteractions = require('./src/interactions/welcome');
+const voiceConfirmInteractions = require('./src/interactions/voiceconfirm');
 
 
 const {
@@ -183,7 +184,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const handled = await reportInteractions.dispatch(interaction)
                    || await announcementInteractions.dispatch(interaction)
                    || await captchaInteractions.dispatch(interaction)
-                   || await welcomeInteractions.dispatch(interaction);
+                   || await welcomeInteractions.dispatch(interaction)
+                   || await voiceConfirmInteractions.dispatch(interaction);
       if (!handled) {
         await interaction.reply({ content: 'Unbekannte Interaktion.', flags: MessageFlags.Ephemeral }).catch(() => {});
       }
