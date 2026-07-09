@@ -15,7 +15,13 @@ module.exports = {
     try {
       // Load configurations
       const enabled = await config.getVoiceRecEnabled(guildId);
-      if (!enabled) return;
+      if (!enabled) {
+        // Feature wurde deaktiviert, Bot hängt aber noch im VC → Verbindung
+        // trennen, damit kein weiteres Audio zur Spracherkennung gestreamt wird.
+        const { getVoiceConnection } = require('@discordjs/voice');
+        getVoiceConnection(guildId)?.destroy();
+        return;
+      }
 
       const channelId = await config.getVoiceRecChannelId(guildId);
       if (!channelId) return;

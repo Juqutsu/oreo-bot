@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, MessageFlags, ChannelType } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
+const config = require('../config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -20,6 +21,14 @@ module.exports = {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'join') {
+      const recEnabled = await config.getVoiceRecEnabled(interaction.guildId);
+      if (!recEnabled) {
+        return interaction.reply({
+          content: '❌ Voice-Recognition ist für diesen Server deaktiviert. Ein Admin kann sie über `/config voice` aktivieren. Solange sie aus ist, trete ich keinem Voice-Kanal bei (Datenschutz: Audio würde zur Spracherkennung an einen externen Dienst gestreamt).',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
       const voiceChannel = interaction.member.voice.channel;
       if (!voiceChannel) {
         return interaction.reply({
