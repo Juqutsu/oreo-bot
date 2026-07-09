@@ -36,6 +36,12 @@ function sweepSessions() {
 const sweepInterval = setInterval(sweepSessions, 60_000);
 sweepInterval.unref?.();
 
+// Module-level claim set for the delete-confirmation button's double-click race (see
+// invariant 13's known-gap note — previously "harmless at worst", now closed outright).
+// There is no session object for delconfirm (unlike the preview/post flow above), so the
+// claim is keyed directly by announcementId instead of living on a session.
+const pendingDeletes = new Set();
+
 // ---------- Helpers ----------
 
 // Reverse-maps a stored embed color (INT) back to its COLORS key, for prefilling
@@ -324,11 +330,19 @@ async function handlePreviewButton(interaction, parts) {
     }
     session.posting = true;
 
-    if (session.mode === 'edit') {
-      await handlePostEdit(interaction, nonce, session);
-      return;
+    // finally-reset covers every exit out of the handlers below: the success path deletes
+    // the session first (previewSessions.delete(nonce)), making this a no-op; failure paths
+    // leave the session alive, so this is now the ONLY place that resets `posting` for them
+    // (the handlers' own explicit `session.posting = false` resets were removed as redundant).
+    try {
+      if (session.mode === 'edit') {
+        await handlePostEdit(interaction, nonce, session);
+      } else {
+        await handlePostCreate(interaction, nonce, session);
+      }
+    } finally {
+      if (previewSessions.has(nonce)) session.posting = false;
     }
-    await handlePostCreate(interaction, nonce, session);
     return;
   }
 
@@ -347,7 +361,6 @@ async function handlePostCreate(interaction, nonce, session) {
   // 1. Target-Channel re-fetchen (race-protection)
   const targetChannel = await interaction.guild.channels.fetch(session.targetChannelId).catch(() => null);
   if (!targetChannel?.isTextBased() || targetChannel.isDMBased()) {
-    session.posting = false;
     await interaction.reply({ content: '❌ Target-Channel nicht mehr verfügbar.', flags: MessageFlags.Ephemeral });
     return;
   }
@@ -355,7 +368,6 @@ async function handlePostCreate(interaction, nonce, session) {
   // 2. Bot-Perms re-validieren
   const botPerms = targetChannel.permissionsFor(interaction.guild.members.me);
   if (!botPerms?.has([PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) {
-    session.posting = false;
     await interaction.reply({ content: `❌ Mir fehlen Permissions in <#${targetChannel.id}>.`, flags: MessageFlags.Ephemeral });
     return;
   }
@@ -370,7 +382,6 @@ async function handlePostCreate(interaction, nonce, session) {
       if (pingRole.id === interaction.guild.id) {
         // @everyone role (everyone-role-id === guild-id)
         if (!botPerms.has(PermissionFlagsBits.MentionEveryone)) {
-          session.posting = false;
           await interaction.reply({
             content: `❌ Mir fehlt die Permission \`MentionEveryone\` in <#${targetChannel.id}>.`,
             flags: MessageFlags.Ephemeral,
@@ -404,7 +415,6 @@ async function handlePostCreate(interaction, nonce, session) {
     postedMessage = await targetChannel.send(payload);
   } catch (err) {
     console.warn('/announcement post failed:', err);
-    session.posting = false;
     await interaction.reply({
       content: `❌ Posting fehlgeschlagen: ${err.code ?? err.message ?? 'unbekannter Fehler'}`,
       flags: MessageFlags.Ephemeral,
@@ -476,9 +486,9 @@ async function handlePostCreate(interaction, nonce, session) {
 // ---------- Post handler (mode: edit) ----------
 //
 // Applies the session's edited title/description/imageUrl to the already-posted
-// original message + DB row. Mirrors handlePostCreate's structure: every failure
-// path resets session.posting = false before its reply/update (session.posting was
-// synchronously claimed in handlePreviewButton, before this function is reached),
+// original message + DB row. Mirrors handlePostCreate's structure: session.posting was
+// synchronously claimed in handlePreviewButton before this function is reached, and its
+// try/finally there resets the flag on every failure path (see comment at the call site);
 // retryable failures use interaction.reply() (leaves the preview + its buttons
 // intact so the mod can click "✅ Übernehmen" again), terminal failures (row gone /
 // original message gone) use interaction.update() to replace the preview outright.
@@ -489,12 +499,10 @@ async function handlePostEdit(interaction, nonce, session) {
     row = await announcements.getAnnouncement(interaction.guildId, session.announcementId);
   } catch (err) {
     console.error('[announcement] failed to reload announcement for edit-apply:', err);
-    session.posting = false;
     await interaction.reply({ content: '❌ Datenbankfehler beim Laden des Announcements.', flags: MessageFlags.Ephemeral });
     return;
   }
   if (!row || row.status === 'deleted') {
-    session.posting = false;
     previewSessions.delete(nonce); // terminal failure — don't leave the dead session for the TTL sweeper
     await interaction.update({
       content: '❌ Dieses Announcement existiert nicht mehr in der Verwaltung.',
@@ -509,7 +517,6 @@ async function handlePostEdit(interaction, nonce, session) {
   const message = channel ? await channel.messages.fetch(row.message_id).catch(() => null) : null;
 
   if (!message) {
-    session.posting = false;
     previewSessions.delete(nonce); // terminal failure — don't leave the dead session for the TTL sweeper
     await interaction.update({
       content: '❌ Die Original-Nachricht existiert nicht mehr (manuell gelöscht?).',
@@ -541,7 +548,6 @@ async function handlePostEdit(interaction, nonce, session) {
     await message.edit({ embeds: [embed] });
   } catch (err) {
     console.warn('/announcement edit-apply failed:', err);
-    session.posting = false;
     await interaction.reply({
       content: `❌ Bearbeiten fehlgeschlagen: ${err.code ?? err.message ?? 'unbekannter Fehler'}`,
       flags: MessageFlags.Ephemeral,
@@ -647,69 +653,83 @@ async function handleDelConfirm(interaction, parts) {
     return;
   }
 
-  let row;
-  try {
-    row = await announcements.getAnnouncement(interaction.guildId, id);
-  } catch (err) {
-    console.error('[announcement] failed to load announcement for delete-confirm:', err);
-    await interaction.reply({ content: '❌ Datenbankfehler beim Laden des Announcements.', flags: MessageFlags.Ephemeral });
+  // Synchronous claim BEFORE any await — closes the delete-confirm double-click race (see
+  // invariant 13's known-gap note: previously "harmless at worst", now closed outright).
+  // Keyed by announcementId since there is no session object here, unlike the preview/post
+  // guard above.
+  if (pendingDeletes.has(id)) {
+    await interaction.reply({ content: '⏳ Wird bereits gelöscht …', flags: MessageFlags.Ephemeral }).catch(() => null);
     return;
   }
-
-  if (!row) {
-    await interaction.update({ content: `❌ Announcement #${id} nicht gefunden.`, embeds: [], components: [] });
-    return;
-  }
-  if (row.status === 'deleted') {
-    await interaction.update({ content: '❌ Bereits gelöscht.', embeds: [], components: [] });
-    return;
-  }
-
-  // Best-effort deletion of the original message. BOTH the channel fetch and the message
-  // delete tolerate the target being gone — in the orphan case (Task 4) the message no
-  // longer exists by definition, and the soft-delete below must still proceed.
-  const channel = await interaction.guild.channels.fetch(row.channel_id).catch(() => null);
-  if (channel?.messages) {
-    await channel.messages.delete(row.message_id).catch(() => null);
-  }
+  pendingDeletes.add(id);
 
   try {
-    await announcements.markDeleted(interaction.guildId, row.id);
-  } catch (err) {
-    console.error('[announcement] failed to mark announcement deleted:', err);
-    await interaction.reply({ content: '❌ Datenbankfehler beim Löschen des Announcements.', flags: MessageFlags.Ephemeral });
-    return;
-  }
-
-  await interaction.update({
-    content: `🗑️ Announcement #${row.id} („${truncate(row.title, 60)}") gelöscht.`,
-    embeds: [],
-    components: [],
-  });
-
-  // Mod-log embed (fail-soft) — the ex-channel is deliberately rendered as <#id> instead of
-  // using a channel object, since the channel itself may already be gone in the orphan case.
-  try {
-    const modLogChannelId = await config.getModLogChannelId(interaction.guildId);
-    if (modLogChannelId) {
-      const modLogChannel = await interaction.client.channels.fetch(modLogChannelId);
-      if (modLogChannel) {
-        const logEmbed = new EmbedBuilder()
-          .setTitle('🗑️ Announcement gelöscht')
-          .setColor(0xed4245)
-          .addFields(
-            { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
-            { name: '📺 Ex-Channel', value: `<#${row.channel_id}>`, inline: true },
-            { name: '📝 Titel', value: row.title, inline: false },
-          )
-          .setFooter({ text: '🐾 Oreo' })
-          .setTimestamp();
-
-        await modLogChannel.send({ embeds: [logEmbed] });
-      }
+    let row;
+    try {
+      row = await announcements.getAnnouncement(interaction.guildId, id);
+    } catch (err) {
+      console.error('[announcement] failed to load announcement for delete-confirm:', err);
+      await interaction.reply({ content: '❌ Datenbankfehler beim Laden des Announcements.', flags: MessageFlags.Ephemeral });
+      return;
     }
-  } catch (err) {
-    console.warn('[announcement] delete modlog post failed:', err);
+
+    if (!row) {
+      await interaction.update({ content: `❌ Announcement #${id} nicht gefunden.`, embeds: [], components: [] });
+      return;
+    }
+    if (row.status === 'deleted') {
+      await interaction.update({ content: '❌ Bereits gelöscht.', embeds: [], components: [] });
+      return;
+    }
+
+    // Best-effort deletion of the original message. BOTH the channel fetch and the message
+    // delete tolerate the target being gone — in the orphan case (Task 4) the message no
+    // longer exists by definition, and the soft-delete below must still proceed.
+    const channel = await interaction.guild.channels.fetch(row.channel_id).catch(() => null);
+    if (channel?.messages) {
+      await channel.messages.delete(row.message_id).catch(() => null);
+    }
+
+    try {
+      await announcements.markDeleted(interaction.guildId, row.id);
+    } catch (err) {
+      console.error('[announcement] failed to mark announcement deleted:', err);
+      await interaction.reply({ content: '❌ Datenbankfehler beim Löschen des Announcements.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    await interaction.update({
+      content: `🗑️ Announcement #${row.id} („${truncate(row.title, 60)}") gelöscht.`,
+      embeds: [],
+      components: [],
+    });
+
+    // Mod-log embed (fail-soft) — the ex-channel is deliberately rendered as <#id> instead of
+    // using a channel object, since the channel itself may already be gone in the orphan case.
+    try {
+      const modLogChannelId = await config.getModLogChannelId(interaction.guildId);
+      if (modLogChannelId) {
+        const modLogChannel = await interaction.client.channels.fetch(modLogChannelId);
+        if (modLogChannel) {
+          const logEmbed = new EmbedBuilder()
+            .setTitle('🗑️ Announcement gelöscht')
+            .setColor(0xed4245)
+            .addFields(
+              { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
+              { name: '📺 Ex-Channel', value: `<#${row.channel_id}>`, inline: true },
+              { name: '📝 Titel', value: row.title, inline: false },
+            )
+            .setFooter({ text: '🐾 Oreo' })
+            .setTimestamp();
+
+          await modLogChannel.send({ embeds: [logEmbed] });
+        }
+      }
+    } catch (err) {
+      console.warn('[announcement] delete modlog post failed:', err);
+    }
+  } finally {
+    pendingDeletes.delete(id);
   }
 }
 
@@ -741,5 +761,5 @@ async function dispatch(interaction) {
 
 module.exports = {
   dispatch,
-  _internal: { previewSessions, buildAnnouncementEmbed, PREVIEW_TTL_MS, sweepSessions },
+  _internal: { previewSessions, buildAnnouncementEmbed, PREVIEW_TTL_MS, sweepSessions, truncateForDiff },
 };

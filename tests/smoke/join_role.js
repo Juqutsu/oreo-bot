@@ -89,7 +89,11 @@ async function main() {
       roles: {
         everyone: { id: GUILD_ID },
         cache: {
-          get: (id) => ({ id, name: 'Role' })
+          get: (id) => ({ id, name: 'Role' }),
+          // Mute-rejoin path (getMutedRole) falls back to roles.cache.find() when no
+          // muted_role_id is configured — without this the fallback throws a TypeError
+          // that guildMemberAdd's mute-rejoin try/catch swallows, but still logs noisily.
+          find: () => undefined
         },
         fetch: async (id) => ({ id, name: 'Role' })
       }
@@ -116,7 +120,8 @@ async function main() {
     name: 'Test Guild',
     roles: {
       cache: {
-        get: (id) => ({ id, name: 'Role' })
+        get: (id) => ({ id, name: 'Role' }),
+        find: () => undefined
       },
       fetch: async (id) => ({ id, name: 'Role' })
     },

@@ -8,11 +8,16 @@ const envTtl = Number.parseInt(process.env.OREO_CONFIG_CACHE_TTL_MS ?? '', 10);
 const ROW_CACHE_TTL_MS = envTtl >= 0 ? envTtl : 30_000;
 // guildId -> { row, fetchedAt }
 const rowCache = new Map();
+// guildId -> in-flight readGuildRow() Promise. Dedupes concurrent cold-cache reads for the
+// same guild (e.g. several getters firing off the same tick) into a single SELECT.
+const rowInflight = new Map();
 
 // TTL-Cache für Bad Words (+ vor-normalisierte Varianten) pro Guild. Teilt sich dieselbe TTL.
 const BAD_WORDS_CACHE_TTL_MS = ROW_CACHE_TTL_MS;
 // guildId -> { words, normalized, fetchedAt }
 const badWordsCache = new Map();
+// guildId -> in-flight getBadWords() cache-fill Promise (same coalescing as rowInflight above).
+const badWordsInflight = new Map();
 
 /**
  * Invalidiert die gecachte Guild-Row. Wird von JEDEM Setter direkt nach seinem
@@ -42,13 +47,24 @@ async function readGuildRow(guildId) {
     return cached.row;
   }
 
-  const [rows] = await getPool().execute(
-    'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, join_role_id, join_role_ids, verified_role_ids, unverified_role_ids, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message, welcome_banner_enabled, leave_banner_enabled, welcome_banner_text, leave_banner_text FROM guilds WHERE guild_id = ?',
-    [guildId],
-  );
-  const row = rows[0] ?? null;
-  rowCache.set(guildId, { row, fetchedAt: Date.now() });
-  return row;
+  if (rowInflight.has(guildId)) return rowInflight.get(guildId);
+
+  const fetchPromise = (async () => {
+    const [rows] = await getPool().execute(
+      'SELECT mod_log_channel_id, report_channel_id, msg_log_channel_id, server_log_channel_id, min_account_age_days, warn_decay_days, muted_role_id, automod_enabled, captcha_enabled, verified_role_id, join_role_id, join_role_ids, verified_role_ids, unverified_role_ids, toxicity_enabled, toxicity_action, captcha_channel_id, log_profile_enabled, log_join_leave_enabled, log_voice_enabled, log_invite_enabled, log_roles_enabled, log_messages_enabled, welcome_channel_id, leave_channel_id, welcome_enabled, leave_enabled, welcome_message, leave_message, welcome_bg_url, leave_bg_url, welcome_accent_color, welcome_text_color, leave_accent_color, leave_text_color, voice_rec_enabled, voice_rec_channel_id, voice_rec_message, welcome_banner_enabled, leave_banner_enabled, welcome_banner_text, leave_banner_text FROM guilds WHERE guild_id = ?',
+      [guildId],
+    );
+    const row = rows[0] ?? null;
+    rowCache.set(guildId, { row, fetchedAt: Date.now() });
+    return row;
+  })();
+
+  rowInflight.set(guildId, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    rowInflight.delete(guildId);
+  }
 }
 
 /**
@@ -368,14 +384,25 @@ async function getBadWords(guildId) {
     return cached.words;
   }
 
-  const [rows] = await getPool().execute(
-    'SELECT word FROM bad_words WHERE guild_id = ? ORDER BY word ASC',
-    [guildId]
-  );
-  const words = rows.map((r) => r.word);
-  const normalized = words.map((word) => ({ word, normalized: normalize(word) }));
-  badWordsCache.set(guildId, { words, normalized, fetchedAt: Date.now() });
-  return words;
+  if (badWordsInflight.has(guildId)) return badWordsInflight.get(guildId);
+
+  const fetchPromise = (async () => {
+    const [rows] = await getPool().execute(
+      'SELECT word FROM bad_words WHERE guild_id = ? ORDER BY word ASC',
+      [guildId]
+    );
+    const words = rows.map((r) => r.word);
+    const normalized = words.map((word) => ({ word, normalized: normalize(word) }));
+    badWordsCache.set(guildId, { words, normalized, fetchedAt: Date.now() });
+    return words;
+  })();
+
+  badWordsInflight.set(guildId, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    badWordsInflight.delete(guildId);
+  }
 }
 
 /**

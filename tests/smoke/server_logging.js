@@ -75,7 +75,13 @@ async function main() {
   const mockGuild = {
     id: GUILD_ID,
     roles: {
-      everyone: { id: GUILD_ID }
+      everyone: { id: GUILD_ID },
+      // Mute-rejoin path (getMutedRole) falls back to roles.cache.find() when no
+      // muted_role_id is configured — without this the fallback throws a TypeError
+      // that guildMemberAdd's mute-rejoin try/catch swallows, but still logs noisily.
+      cache: {
+        find: () => undefined
+      }
     },
     members: {
       me: {
