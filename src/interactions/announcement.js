@@ -51,6 +51,14 @@ function truncateForDiff(str) {
   return str.length > 300 ? str.slice(0, 300) + '…' : str;
 }
 
+// Same 60-char convention as commands/announcement.js's own `truncate` (kept as a local
+// copy here rather than exported/imported — see the require-cycle note on the COLORS
+// import above; this one's small enough not to be worth threading through the cycle fix).
+function truncate(str, max) {
+  if (!str) return str;
+  return str.length > max ? `${str.slice(0, max - 1)}…` : str;
+}
+
 // Display-only ping formatting for the ephemeral preview line (NOT used for the
 // actual post — handlePostCreate re-resolves + re-validates the role itself).
 function formatPingText(pingRoleId, guildId) {
@@ -487,6 +495,7 @@ async function handlePostEdit(interaction, nonce, session) {
   }
   if (!row || row.status === 'deleted') {
     session.posting = false;
+    previewSessions.delete(nonce); // terminal failure — don't leave the dead session for the TTL sweeper
     await interaction.update({
       content: '❌ Dieses Announcement existiert nicht mehr in der Verwaltung.',
       embeds: [],
@@ -501,6 +510,7 @@ async function handlePostEdit(interaction, nonce, session) {
 
   if (!message) {
     session.posting = false;
+    previewSessions.delete(nonce); // terminal failure — don't leave the dead session for the TTL sweeper
     await interaction.update({
       content: '❌ Die Original-Nachricht existiert nicht mehr (manuell gelöscht?).',
       embeds: [],
@@ -605,6 +615,104 @@ async function handlePostEdit(interaction, nonce, session) {
   }
 }
 
+// ---------- Delete-confirmation button handler (yes / no) ----------
+//
+// customId: announcement:delconfirm:<yes|no>:<announcementId>. Button interactions are
+// NOT auto-deferred by index.js (only ChatInput commands are), so plain reply()/update()
+// calls here are correct, matching handlePreviewButton above.
+//
+// The `yes` branch also serves the orphan-cleanup button handlePostEdit renders when the
+// original message is already gone (Task 4): row.message_id then points at a message that
+// no longer exists, so channel/message-delete failures must be tolerated, not treated as
+// errors — the soft-delete (markDeleted) still needs to proceed.
+async function handleDelConfirm(interaction, parts) {
+  if (!(await perms.requireTier(interaction, 'moderator'))) return;
+
+  const action = parts[2]; // yes | no
+  const id = Number.parseInt(parts[3], 10);
+
+  if (action === 'no') {
+    await interaction.update({ content: '✅ Abgebrochen.', embeds: [], components: [] });
+    return;
+  }
+
+  if (action !== 'yes') {
+    console.warn(`[announcement] unhandled delconfirm action=${action}`);
+    await interaction.reply({ content: '❌ Unbekannte Announcement-Interaktion.', flags: MessageFlags.Ephemeral }).catch(() => null);
+    return;
+  }
+
+  if (Number.isNaN(id)) {
+    await interaction.update({ content: '❌ Ungültige Announcement-Interaktion.', embeds: [], components: [] });
+    return;
+  }
+
+  let row;
+  try {
+    row = await announcements.getAnnouncement(interaction.guildId, id);
+  } catch (err) {
+    console.error('[announcement] failed to load announcement for delete-confirm:', err);
+    await interaction.reply({ content: '❌ Datenbankfehler beim Laden des Announcements.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (!row) {
+    await interaction.update({ content: `❌ Announcement #${id} nicht gefunden.`, embeds: [], components: [] });
+    return;
+  }
+  if (row.status === 'deleted') {
+    await interaction.update({ content: '❌ Bereits gelöscht.', embeds: [], components: [] });
+    return;
+  }
+
+  // Best-effort deletion of the original message. BOTH the channel fetch and the message
+  // delete tolerate the target being gone — in the orphan case (Task 4) the message no
+  // longer exists by definition, and the soft-delete below must still proceed.
+  const channel = await interaction.guild.channels.fetch(row.channel_id).catch(() => null);
+  if (channel?.messages) {
+    await channel.messages.delete(row.message_id).catch(() => null);
+  }
+
+  try {
+    await announcements.markDeleted(interaction.guildId, row.id);
+  } catch (err) {
+    console.error('[announcement] failed to mark announcement deleted:', err);
+    await interaction.reply({ content: '❌ Datenbankfehler beim Löschen des Announcements.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  await interaction.update({
+    content: `🗑️ Announcement #${row.id} („${truncate(row.title, 60)}") gelöscht.`,
+    embeds: [],
+    components: [],
+  });
+
+  // Mod-log embed (fail-soft) — the ex-channel is deliberately rendered as <#id> instead of
+  // using a channel object, since the channel itself may already be gone in the orphan case.
+  try {
+    const modLogChannelId = await config.getModLogChannelId(interaction.guildId);
+    if (modLogChannelId) {
+      const modLogChannel = await interaction.client.channels.fetch(modLogChannelId);
+      if (modLogChannel) {
+        const logEmbed = new EmbedBuilder()
+          .setTitle('🗑️ Announcement gelöscht')
+          .setColor(0xed4245)
+          .addFields(
+            { name: '🛡️ Moderator', value: `<@${interaction.user.id}>`, inline: true },
+            { name: '📺 Ex-Channel', value: `<#${row.channel_id}>`, inline: true },
+            { name: '📝 Titel', value: row.title, inline: false },
+          )
+          .setFooter({ text: '🐾 Oreo' })
+          .setTimestamp();
+
+        await modLogChannel.send({ embeds: [logEmbed] });
+      }
+    }
+  } catch (err) {
+    console.warn('[announcement] delete modlog post failed:', err);
+  }
+}
+
 // ---------- Dispatcher ----------
 
 async function dispatch(interaction) {
@@ -619,6 +727,11 @@ async function dispatch(interaction) {
 
   if (parts[1] === 'preview' && interaction.isButton()) {
     await handlePreviewButton(interaction, parts);
+    return true;
+  }
+
+  if (parts[1] === 'delconfirm' && interaction.isButton()) {
+    await handleDelConfirm(interaction, parts);
     return true;
   }
 

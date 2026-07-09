@@ -7,6 +7,9 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  EmbedBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require('discord.js');
 const announcements = require('../announcements');
 
@@ -43,6 +46,35 @@ function formatDayMonth(dateLike) {
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   return `${dd}.${mm}.`;
+}
+
+// Formats a date as "TT.MM.JJJJ" for the /announcement list overview.
+function formatFullDate(dateLike) {
+  const d = new Date(dateLike);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}.${mm}.${d.getFullYear()}`;
+}
+
+/**
+ * Small, self-contained embed for the delete-confirmation prompt (preview of the original
+ * announcement from the DB row). Deliberately NOT importing the same-named
+ * buildAnnouncementEmbed from src/interactions/announcement.js: that module already
+ * requires this one (COLORS, buildAnnouncementModal), so importing back would be a require
+ * cycle. This copy is intentionally minimal (confirmation preview only) rather than sharing
+ * the builder across the cycle.
+ */
+function buildDeletePreviewEmbed(row) {
+  const embed = new EmbedBuilder()
+    .setTitle(row.title)
+    .setDescription(row.description)
+    .setColor(row.color ?? COLORS.blurple)
+    .setFooter({ text: row.edited_at ? '🐾 Oreo • bearbeitet' : '🐾 Oreo' })
+    .setTimestamp(row.created_at);
+
+  if (row.image_url) embed.setImage(row.image_url);
+
+  return embed;
 }
 
 /**
@@ -156,6 +188,64 @@ async function executeEdit(interaction) {
   );
 }
 
+// delete runs auto-deferred (ephemeral) — interaction.reply() below is monkey-patched to
+// editReply() by index.js (invariant 2). This first reply is the confirmation prompt;
+// the actual deletion happens in src/interactions/announcement.js's delconfirm handler.
+async function executeDelete(interaction) {
+  const id = Number.parseInt(interaction.options.getString('id'), 10);
+
+  if (id === 0 || Number.isNaN(id)) {
+    return interaction.reply({ content: '❌ Keine Announcements vorhanden.', flags: MessageFlags.Ephemeral });
+  }
+
+  const row = await announcements.getAnnouncement(interaction.guildId, id);
+  if (!row) {
+    return interaction.reply({ content: `❌ Announcement #${id} nicht gefunden.`, flags: MessageFlags.Ephemeral });
+  }
+  if (row.status === 'deleted') {
+    return interaction.reply({ content: '❌ Bereits gelöscht.', flags: MessageFlags.Ephemeral });
+  }
+
+  return interaction.reply({
+    content: '⚠️ Dieses Announcement endgültig löschen? Die Nachricht wird entfernt.',
+    embeds: [buildDeletePreviewEmbed(row)],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`announcement:delconfirm:yes:${row.id}`)
+          .setLabel('🗑️ Endgültig löschen')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`announcement:delconfirm:no:${row.id}`)
+          .setLabel('Abbrechen')
+          .setStyle(ButtonStyle.Secondary),
+      ),
+    ],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+// list runs auto-deferred (ephemeral) — same monkey-patched reply() as delete above.
+async function executeList(interaction) {
+  const rows = await announcements.listRecent(interaction.guildId, 10);
+
+  if (rows.length === 0) {
+    return interaction.reply({ content: 'Noch keine Announcements gespeichert.', flags: MessageFlags.Ephemeral });
+  }
+
+  const lines = rows.map((r) => {
+    const link = `https://discord.com/channels/${interaction.guildId}/${r.channel_id}/${r.message_id}`;
+    return `#${r.id} · **${truncate(r.title, 60)}** · <#${r.channel_id}> · <@${r.author_id}> · ${formatFullDate(r.created_at)} · [Link](${link})`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setTitle('📢 Announcements (letzte 10)')
+    .setDescription(lines.join('\n'))
+    .setFooter({ text: '🐾 Oreo' });
+
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('announcement')
@@ -215,9 +305,11 @@ module.exports = {
 
     if (sub === 'create') return executeCreate(interaction);
     if (sub === 'edit') return executeEdit(interaction);
+    if (sub === 'delete') return executeDelete(interaction);
+    if (sub === 'list') return executeList(interaction);
 
-    // delete/list: placeholder, Task 5 implements the real logic against the auto-defer.
-    return interaction.reply({ content: '⏳ Noch nicht implementiert.', flags: MessageFlags.Ephemeral });
+    // Unreachable — every subcommand declared in `data` above has a branch.
+    return interaction.reply({ content: '❌ Unbekannter Subcommand.', flags: MessageFlags.Ephemeral });
   },
 
   // Shared between edit + delete (both take an autocompleted `id` string option).
