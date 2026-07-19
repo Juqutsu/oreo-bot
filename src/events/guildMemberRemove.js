@@ -44,14 +44,25 @@ async function execute(member) {
           const bgUrl = await config.getLeaveBgUrl(guildId);
           const bannerEnabled = await config.isLeaveBannerEnabled(guildId);
 
+          // Compute the human (bot-excluded) member count once and share it between
+          // the message text and the card, so the two can never disagree and neither
+          // silently falls back to the bot-inclusive guild.memberCount.
+          let memberCount = member.guild.memberCount;
+          try {
+            const members = await member.guild.members.fetch();
+            memberCount = members.filter((m) => !m.user.bot).size;
+          } catch (err) {
+            console.warn('[leave-system] failed to fetch guild members, falling back to total memberCount:', err.message);
+          }
+
           const { formatWelcomeMessage } = require('../welcomeCard');
-          const messageText = await formatWelcomeMessage(leaveMessageTemplate, member);
+          const messageText = await formatWelcomeMessage(leaveMessageTemplate, member, memberCount);
 
           const sendPayload = { content: messageText };
 
           if (bannerEnabled) {
             const { generateCard } = require('../welcomeCard');
-            const cardBuffer = await generateCard(member.user, member.guild, 'leave', bgUrl);
+            const cardBuffer = await generateCard(member.user, member.guild, 'leave', bgUrl, memberCount);
             const { AttachmentBuilder } = require('discord.js');
             const attachment = new AttachmentBuilder(cardBuffer, { name: 'leave.png' });
             sendPayload.files = [attachment];

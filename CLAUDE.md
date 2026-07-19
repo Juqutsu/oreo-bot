@@ -81,7 +81,14 @@ src/verifications.js     pending_verifications DAL (trackJoin/markVerified/remov
                          restart-safe captcha deadlines (invariant 15)
 src/automod.js           Discord-native AutoMod rules/wordlist/exemptions
 src/invites.js           in-memory invite-uses cache for join attribution
-src/welcomeCard.js       canvas welcome/leave cards (optional memberCount param avoids double-fetch)
+src/welcomeCard.js       canvas welcome/leave cards (optional memberCount param avoids double-fetch).
+                         Member count is ALWAYS bot-excluded: both generateCard and formatWelcomeMessage
+                         compute `members.filter(m => !m.user.bot).size`, falling back to the raw
+                         (bot-inclusive) guild.memberCount only if members.fetch() throws. Both the join
+                         (guildMemberAdd) and leave (guildMemberRemove) handlers now compute the human
+                         count ONCE and pass it to both the card and the message text, so the two can
+                         never disagree (previously the leave handler fetched twice independently → the
+                         text and card could show different numbers, e.g. 439 vs 445).
 src/background.js        60s expiry/decay loop — re-entrancy guard + timeout-row expiry sweep +
                          verification-deadline sweep (invariant 15)
 src/composables/mutedRole.js  getOrCreateMutedRole (creates) + getMutedRole (read-only resolution)
