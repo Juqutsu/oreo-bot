@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
 const { sendModLog } = require('../modlog');
 const { validateModTarget } = require('../modGuards');
@@ -24,20 +24,6 @@ module.exports = {
     const guard = await validateModTarget(interaction, target, { action: 'kick', requireMember: false });
     if (!guard.ok) {
       return interaction.reply({ content: guard.message, flags: MessageFlags.Ephemeral });
-    }
-    const targetMember = guard.targetMember;
-
-    // DM an Target (Best-Effort) — muss VOR dem Kick passieren, danach ist der User evtl. nicht mehr erreichbar.
-    if (targetMember) {
-      const dmEmbed = new EmbedBuilder()
-        .setTitle(`👢 Kick auf ${interaction.guild.name}`)
-        .setColor(0xe67e22)
-        .addFields(
-          { name: '📝 Grund', value: reason, inline: false },
-        )
-        .setFooter({ text: '🐾 Oreo' })
-        .setTimestamp();
-      await target.send({ embeds: [dmEmbed] }).catch(() => null);
     }
 
     try {

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const cases = require('../cases');
 const { sendModLog } = require('../modlog');
 const { validateModTarget } = require('../modGuards');
@@ -56,23 +56,8 @@ module.exports = {
     if (!guard.ok) {
       return interaction.reply({ content: guard.message, flags: MessageFlags.Ephemeral });
     }
-    const targetMember = guard.targetMember;
 
     const deleteMessageSeconds = deleteMessagesInput ? parseInt(deleteMessagesInput, 10) : 0;
-
-    // DM an Target (Best-Effort) — muss VOR dem Ban passieren, danach ist der User evtl. nicht mehr erreichbar.
-    if (targetMember) {
-      const dmEmbed = new EmbedBuilder()
-        .setTitle(`🔨 Bann auf ${interaction.guild.name}`)
-        .setColor(0xe74c3c)
-        .addFields(
-          { name: '📝 Grund', value: reason, inline: false },
-          ...(durationMs ? [{ name: '⏱️ Dauer', value: durationInput, inline: true }] : []),
-        )
-        .setFooter({ text: '🐾 Oreo' })
-        .setTimestamp();
-      await target.send({ embeds: [dmEmbed] }).catch(() => null);
-    }
 
     try {
       await interaction.guild.members.ban(target.id, {
